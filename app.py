@@ -383,6 +383,14 @@ def init_db():
     if 'league' not in tourcols:
         db.execute("ALTER TABLE tournaments ADD COLUMN league TEXT")
 
+    # Migrate: rating_adjustment column on courses (stroke offset applied to SSA)
+    ccols = [r[1] for r in db.execute("PRAGMA table_info(courses)").fetchall()]
+    if 'rating_adjustment' not in ccols:
+        db.execute("ALTER TABLE courses ADD COLUMN rating_adjustment REAL DEFAULT 0")
+    db.execute("UPDATE courses SET rating_adjustment = 0 WHERE rating_adjustment IS NULL")
+    # Set Destroyer Park Golf adjustment: +2.0 strokes → +20 rating points
+    db.execute("UPDATE courses SET rating_adjustment = 2.0 WHERE name = 'Destroyer Park Golf' AND rating_adjustment = 0")
+
     # Migrate: division column on players
     pcols = [r[1] for r in db.execute("PRAGMA table_info(players)").fetchall()]
     if 'division' not in pcols:
@@ -482,6 +490,17 @@ def recalculate_ratings(db):
             db.execute('UPDATE courses SET course_rating = ? WHERE id = ?',
                        (round(avg_all - 15, 1), cid))
 
+    # Load per-course rating adjustments (stroke offsets → rating points when × 10)
+    course_adjustments = {
+        r['id']: (r['rating_adjustment'] or 0)
+        for r in db.execute('SELECT id, rating_adjustment FROM courses').fetchall()
+    }
+    # Map each tournament to its course
+    tournament_course = {
+        r['id']: r['course_id']
+        for r in db.execute('SELECT id, course_id FROM tournaments').fetchall()
+    }
+
     # Process tournaments in date order — build player ratings as we go
     tournaments = db.execute(
         'SELECT id FROM tournaments ORDER BY sort_date, id'
@@ -492,6 +511,8 @@ def recalculate_ratings(db):
 
     for t in tournaments:
         tid = t['id']
+        course_id = tournament_course.get(tid)
+        adjustment = course_adjustments.get(course_id, 0)
 
         # Rate each round using only pre-tournament player ratings
         for grp in db.execute('''
@@ -508,7 +529,8 @@ def recalculate_ratings(db):
                 r['score'] + (player_ratings[r['player_id']] - 1000) / 10
                 for r in round_rows if r['player_id'] in player_ratings
             ]
-            eff_scratch = sum(implied) / len(implied) if implied else grp['avg_round_score'] - 7.5
+            # Apply course adjustment: positive value raises eff_scratch → raises all ratings
+            eff_scratch = (sum(implied) / len(implied) if implied else grp['avg_round_score'] - 7.5) + adjustment
 
             for r in round_rows:
                 db.execute('UPDATE rounds SET rating = ? WHERE id = ?',
