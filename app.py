@@ -1213,6 +1213,17 @@ def travelers_league():
     return render_template('travelers_league.html', standings=standings)
 
 
+@app.route('/reset-baselines', methods=['POST'])
+@admin_required
+def reset_baselines():
+    """Set previous_rating = current_rating for all players, clearing all change indicators."""
+    db = get_db()
+    db.execute('UPDATE players SET previous_rating = current_rating')
+    db.commit()
+    flash('Rating baselines reset — change indicators will reappear after the next event is added.', 'success')
+    return redirect(url_for('index'))
+
+
 @app.route('/calculator')
 def calculator():
     db = get_db()

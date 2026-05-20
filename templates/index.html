@@ -43,9 +43,16 @@
 
   {# Name search #}
   {% if players %}
-  <div class="ms-auto" style="min-width:180px; max-width:260px">
+  <div class="ms-auto d-flex align-items-center gap-2" style="min-width:180px; max-width:400px">
     <input type="search" id="player-search" class="form-control form-control-sm"
            placeholder="🔍 Search player…" autocomplete="off">
+    {% if session.get('admin') and selected_year == 'all' %}
+    <form method="post" action="{{ url_for('reset_baselines') }}"
+          onsubmit="return confirm('Reset all rating change indicators? They will reappear after the next event is added.')">
+      <button type="submit" class="btn btn-sm btn-outline-secondary text-nowrap"
+              title="Clear ↑↓ arrows and +/− rating changes">Reset Baselines</button>
+    </form>
+    {% endif %}
   </div>
   {% endif %}
 
