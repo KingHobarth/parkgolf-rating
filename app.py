@@ -1,6 +1,7 @@
 import sqlite3
 import os
 import re
+import shutil
 import statistics
 from datetime import datetime
 from functools import wraps
@@ -341,6 +342,11 @@ def compute_travelers_standings(db):
 
 
 def init_db():
+    # On first deploy to Render, seed the persistent disk DB from the repo copy
+    repo_db = os.path.join(os.path.dirname(__file__), 'parkgolf.db')
+    if not os.path.exists(DATABASE) and os.path.exists(repo_db) and DATABASE != repo_db:
+        shutil.copy2(repo_db, DATABASE)
+
     db = sqlite3.connect(DATABASE)
     db.row_factory = sqlite3.Row
     with open(os.path.join(os.path.dirname(__file__), 'schema.sql')) as f:
