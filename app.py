@@ -457,17 +457,19 @@ def calculate_rating(course_rating, score):
 
 
 def recalculate_ratings(db):
-    """Recompute per-round ratings using the SSA (Scratch Scoring Average) method.
+    """Recompute per-round ratings in strict chronological order.
+
+    Processes each tournament in date order, anchoring the SSA only on ratings
+    earned in *prior* tournaments. This prevents the feedback loop where
+    add/delete operations cause ratings to drift upward over time.
 
     For each round:
-      1. Each rated player implies a scratch: score + (player_rating - 1000) / 10
-         (i.e. "given my rating, what scratch explains my score?")
+      1. Each previously-rated player implies a scratch: score + (rating - 1000) / 10
       2. Average those implied scratches → the round's SSA
       3. Rate everyone: rating = 1000 + (SSA - score) * 10
+      4. After each tournament, update the running player_ratings from all rounds so far
 
-    A player performing exactly at their prior rating gets the same rating back.
-    Falls back to round_avg - 7.5 when no players have prior ratings.
-    Course_rating is still stored for display reference but does not affect ratings.
+    Falls back to round_avg - 7.5 when no players have prior ratings yet.
     """
     # Update course_rating for display reference only (all-time avg - 15)
     for course in db.execute('SELECT id FROM courses').fetchall():
@@ -480,36 +482,55 @@ def recalculate_ratings(db):
             db.execute('UPDATE courses SET course_rating = ? WHERE id = ?',
                        (round(avg_all - 15, 1), cid))
 
-    # Load stored player ratings — these anchor the SSA calculation
-    player_ratings = {
-        r['id']: r['current_rating']
-        for r in db.execute('SELECT id, current_rating FROM players').fetchall()
-        if r['current_rating'] is not None
-    }
+    # Process tournaments in date order — build player ratings as we go
+    tournaments = db.execute(
+        'SELECT id FROM tournaments ORDER BY sort_date, id'
+    ).fetchall()
 
-    # Compute SSA and re-rate each round
-    for grp in db.execute('''
-        SELECT tournament_id, round_number, AVG(score) AS avg_round_score
-        FROM rounds GROUP BY tournament_id, round_number
-    ''').fetchall():
-        round_rows = db.execute('''
-            SELECT id, score, player_id FROM rounds
-            WHERE tournament_id = ? AND round_number = ?
-        ''', (grp['tournament_id'], grp['round_number'])).fetchall()
+    player_ratings = {}          # ratings known BEFORE the current tournament
+    processed_ids = []           # tournament ids completed so far
 
-        # Each rated player implies: "the scratch that explains my score given my rating"
-        implied = [
-            r['score'] + (player_ratings[r['player_id']] - 1000) / 10
-            for r in round_rows
-            if r['player_id'] in player_ratings
-        ]
+    for t in tournaments:
+        tid = t['id']
 
-        # SSA = average implied scratch; fallback if no one has a prior rating yet
-        eff_scratch = sum(implied) / len(implied) if implied else grp['avg_round_score'] - 7.5
+        # Rate each round using only pre-tournament player ratings
+        for grp in db.execute('''
+            SELECT round_number, AVG(score) AS avg_round_score
+            FROM rounds WHERE tournament_id = ?
+            GROUP BY round_number
+        ''', (tid,)).fetchall():
+            round_rows = db.execute('''
+                SELECT id, score, player_id FROM rounds
+                WHERE tournament_id = ? AND round_number = ?
+            ''', (tid, grp['round_number'])).fetchall()
 
-        for r in round_rows:
-            db.execute('UPDATE rounds SET rating = ? WHERE id = ?',
-                       (round(1000 + (eff_scratch - r['score']) * 10), r['id']))
+            implied = [
+                r['score'] + (player_ratings[r['player_id']] - 1000) / 10
+                for r in round_rows if r['player_id'] in player_ratings
+            ]
+            eff_scratch = sum(implied) / len(implied) if implied else grp['avg_round_score'] - 7.5
+
+            for r in round_rows:
+                db.execute('UPDATE rounds SET rating = ? WHERE id = ?',
+                           (round(1000 + (eff_scratch - r['score']) * 10), r['id']))
+
+        processed_ids.append(tid)
+
+        # Update player ratings from all rounds in processed tournaments so far
+        player_ids = {r['player_id'] for r in db.execute(
+            'SELECT DISTINCT player_id FROM rounds WHERE tournament_id = ?', (tid,)
+        ).fetchall()}
+
+        placeholders = ','.join('?' * len(processed_ids))
+        for pid in player_ids:
+            rounds = db.execute(f'''
+                SELECT r.id AS round_id, r.rating, r.round_number, t2.sort_date
+                FROM rounds r JOIN tournaments t2 ON t2.id = r.tournament_id
+                WHERE r.player_id = ? AND t2.id IN ({placeholders})
+            ''', (pid, *processed_ids)).fetchall()
+            result = compute_player_rating([dict(r) for r in rounds])
+            if result['rating'] is not None:
+                player_ratings[pid] = result['rating']
 
 
 def update_player_ratings(db):
