@@ -1216,11 +1216,12 @@ def travelers_league():
 @app.route('/reset-baselines', methods=['POST'])
 @admin_required
 def reset_baselines():
-    """Set previous_rating = current_rating for all players, clearing all change indicators."""
+    """Reset previous_rating and peak_rating to current_rating for all players.
+    Clears change indicators and corrects any peak_rating inflation."""
     db = get_db()
-    db.execute('UPDATE players SET previous_rating = current_rating')
+    db.execute('UPDATE players SET previous_rating = current_rating, peak_rating = current_rating')
     db.commit()
-    flash('Rating baselines reset — change indicators will reappear after the next event is added.', 'success')
+    flash('Baselines reset — rating change indicators and peak ratings have been corrected.', 'success')
     return redirect(url_for('index'))
 
 
