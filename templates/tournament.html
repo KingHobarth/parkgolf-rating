@@ -1,0 +1,104 @@
+{% extends 'base.html' %}
+{% block title %}{{ t.name }} — Park Golf Ratings{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{{ url_for('events') }}">Events</a></li>
+    <li class="breadcrumb-item active">{{ t.name }}</li>
+  </ol>
+</nav>
+
+<div class="d-flex justify-content-between align-items-start mb-1">
+  <div>
+    <h2 class="mb-1">{{ t.name }}</h2>
+    <p class="text-muted mb-0">
+      {{ t.course_name }} &middot; {{ t.date }} &middot;
+      Scratch: <strong>{{ t.course_rating }}</strong>
+      {% if t.initial_rating and t.initial_rating != t.course_rating %}
+        <span class="text-muted">(originally {{ t.initial_rating|int }})</span>
+      {% endif %}
+    </p>
+    <div class="mt-1">
+      {% if t.league %}
+        <span class="badge rounded-pill
+          {% if t.league == 'Flex League' %}bg-primary
+          {% elif t.league == 'Monday Night League' %}bg-warning text-dark
+          {% elif t.league == "IPGAA Traveler's League" %}bg-danger
+          {% else %}bg-secondary{% endif %}">
+          {{ t.league }}
+        </span>
+      {% else %}
+        <span class="badge rounded-pill bg-success">Tournament</span>
+      {% endif %}
+    </div>
+  </div>
+  {% if session.get('admin') %}
+  <div class="d-flex gap-2 ms-3 mt-1">
+    <a href="{{ url_for('edit_tournament', tournament_id=t.id) }}"
+       class="btn btn-outline-primary btn-sm">✏️ Edit</a>
+    <a href="{{ url_for('delete_tournament', tournament_id=t.id) }}"
+       class="btn btn-outline-danger btn-sm">🗑️ Delete</a>
+  </div>
+  {% endif %}
+</div>
+
+{% if results %}
+<div class="table-responsive">
+  <table class="table table-hover align-middle" data-sortable>
+    <thead class="table-success">
+      <tr>
+        <th class="text-center" style="width:50px" data-sort>Place</th>
+        <th data-sort>Player</th>
+        {% for rn in round_numbers %}
+        <th class="text-center" data-sort>
+          R{{ rn }}
+          {% if rn in round_stats %}
+          <br><small class="fw-normal text-muted" title="Effective scratch for this round">
+            eff. {{ round_stats[rn].eff_scratch }} <span class="opacity-50">(avg {{ round_stats[rn].avg_score }})</span>
+          </small>
+          {% endif %}
+        </th>
+        {% endfor %}
+        {% if round_numbers|length > 1 %}
+        <th class="text-center" data-sort>Total</th>
+        {% endif %}
+        <th class="text-center" data-sort>Avg Rating</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in results %}
+      <tr>
+        <td class="text-center text-muted fw-bold rank-cell">{{ loop.index }}</td>
+        <td>
+          <a href="{{ url_for('player', player_id=r.player_id) }}" class="text-decoration-none fw-semibold">
+            {{ r.name }}
+          </a>
+        </td>
+        {% for rn in round_numbers %}
+          {% if rn in r.rounds %}
+            <td class="text-center" data-val="{{ r.rounds[rn].score }}">
+              {{ r.rounds[rn].score }}
+              <br><small class="text-muted">{{ r.rounds[rn].rating }}</small>
+            </td>
+          {% else %}
+            <td class="text-center text-muted">—</td>
+          {% endif %}
+        {% endfor %}
+        {% if round_numbers|length > 1 %}
+        <td class="text-center fw-semibold">{{ r.total_score }}</td>
+        {% endif %}
+        <td class="text-center" data-val="{{ r.avg_rating }}">
+          <span class="badge fs-6 {% if r.avg_rating >= 1000 %}bg-success{% elif r.avg_rating >= 950 %}bg-primary{% elif r.avg_rating >= 900 %}bg-info text-dark{% else %}bg-secondary{% endif %}">
+            {{ r.avg_rating }}
+          </span>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="text-muted">No results recorded for this event.</p>
+{% endif %}
+{% endblock %}

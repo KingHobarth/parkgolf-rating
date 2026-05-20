@@ -1,0 +1,159 @@
+{% extends 'base.html' %}
+{% block title %}Leaderboard — Park Golf Ratings{% endblock %}
+
+{% block content %}
+
+{# ── Header row: title + division filter ──────────────────────────────────── #}
+<div class="d-flex justify-content-between align-items-center mb-2">
+  <h2 class="mb-0">
+    Player Leaderboard
+    {% if selected_year != 'all' %}
+      <span class="badge bg-secondary fs-6 ms-2 align-middle">{{ selected_year }}</span>
+    {% endif %}
+  </h2>
+  {% if players %}
+  <div class="btn-group" role="group" id="division-filter">
+    <button type="button" class="btn btn-success active" data-filter="all">All</button>
+    <button type="button" class="btn btn-outline-primary" data-filter="Men">Men</button>
+    <button type="button" class="btn btn-outline-danger" data-filter="Women">Women</button>
+  </div>
+  {% endif %}
+</div>
+
+{# ── Second row: season filter + search ───────────────────────────────────── #}
+{% if available_years or players %}
+<div class="d-flex flex-wrap align-items-center gap-3 mb-3">
+
+  {# Season filter #}
+  {% if available_years %}
+  <div class="d-flex align-items-center gap-1 flex-wrap">
+    <span class="text-muted small me-1">Season:</span>
+    <a href="{{ url_for('index') }}"
+       class="btn btn-sm {% if selected_year == 'all' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+      All-Time
+    </a>
+    {% for yr in available_years %}
+    <a href="{{ url_for('index', year=yr) }}"
+       class="btn btn-sm {% if selected_year == yr %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+      {{ yr }}
+    </a>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {# Name search #}
+  {% if players %}
+  <div class="ms-auto" style="min-width:180px; max-width:260px">
+    <input type="search" id="player-search" class="form-control form-control-sm"
+           placeholder="🔍 Search player…" autocomplete="off">
+  </div>
+  {% endif %}
+
+</div>
+{% endif %}
+
+{% if players %}
+<div class="table-responsive">
+  <table class="table table-hover align-middle" id="leaderboard-table" data-sortable>
+    <thead class="table-success">
+      <tr>
+        <th class="text-center" style="width:60px" data-sort>Rank</th>
+        <th data-sort>Player</th>
+        <th class="text-center" style="width:80px" data-sort>Division</th>
+        <th class="text-center" data-sort>Rating</th>
+        <th class="text-center" data-sort>Rounds</th>
+        <th class="text-center" data-sort>Best Round</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in players %}
+      <tr data-division="{{ p.division }}" data-name="{{ p.name | lower }}">
+        <td class="text-center fw-bold text-muted rank-cell" data-val="{{ loop.index }}">
+          <span class="rank-num"></span>
+          {% if p.rank_change and p.rank_change > 0 %}
+            <span class="text-success small ms-1">↑{{ p.rank_change }}</span>
+          {% elif p.rank_change and p.rank_change < 0 %}
+            <span class="text-danger small ms-1">↓{{ p.rank_change | abs }}</span>
+          {% endif %}
+        </td>
+        <td>
+          <a href="{{ url_for('player', player_id=p.id) }}" class="text-decoration-none fw-semibold">
+            {{ p.name }}
+          </a>
+        </td>
+        <td class="text-center">
+          <span class="badge {% if p.division == 'Women' %}bg-danger{% else %}bg-primary{% endif %} bg-opacity-75">
+            {{ p.division }}
+          </span>
+        </td>
+        <td class="text-center" data-val="{{ p.rating }}">
+          <span class="badge fs-6 {% if p.rating >= 1000 %}bg-success{% elif p.rating >= 950 %}bg-primary{% elif p.rating >= 900 %}bg-info text-dark{% else %}bg-secondary{% endif %}">
+            {{ p.rating }}
+          </span>
+          {% if p.rating_change and p.rating_change > 0 %}
+            <span class="text-success small d-block">+{{ p.rating_change }}</span>
+          {% elif p.rating_change and p.rating_change < 0 %}
+            <span class="text-danger small d-block">{{ p.rating_change }}</span>
+          {% endif %}
+        </td>
+        <td class="text-center text-muted">{{ p.num_rounds }}</td>
+        <td class="text-center text-muted">{{ p.best_rating }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="text-center text-muted py-5">
+  <p class="fs-5">No data yet.</p>
+  <a href="{{ url_for('add_tournament') }}" class="btn btn-success">Add First Tournament</a>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentDivFilter = 'all';
+
+function applyFilters() {
+  const search = (document.getElementById('player-search')?.value || '').trim().toLowerCase();
+  const rows = document.querySelectorAll('#leaderboard-table tbody tr');
+  let rank = 1;
+  rows.forEach(row => {
+    const divMatch = currentDivFilter === 'all' || row.dataset.division === currentDivFilter;
+    const nameMatch = !search || (row.dataset.name || '').includes(search);
+    const show = divMatch && nameMatch;
+    row.style.display = show ? '' : 'none';
+    if (show) row.querySelector('.rank-num').textContent = rank++;
+  });
+}
+
+// Division filter
+document.getElementById('division-filter')?.addEventListener('click', function (e) {
+  const btn = e.target.closest('[data-filter]');
+  if (!btn) return;
+  currentDivFilter = btn.dataset.filter;
+
+  this.querySelectorAll('button').forEach(b => {
+    b.classList.remove('active', 'btn-success', 'btn-primary', 'btn-danger');
+    b.classList.add(
+      b.dataset.filter === 'Men'   ? 'btn-outline-primary' :
+      b.dataset.filter === 'Women' ? 'btn-outline-danger'  : 'btn-outline-success'
+    );
+  });
+  btn.classList.remove('btn-outline-success', 'btn-outline-primary', 'btn-outline-danger');
+  btn.classList.add('active',
+    currentDivFilter === 'Men'   ? 'btn-primary' :
+    currentDivFilter === 'Women' ? 'btn-danger'  : 'btn-success'
+  );
+
+  applyFilters();
+});
+
+// Name search
+document.getElementById('player-search')?.addEventListener('input', applyFilters);
+
+// Init
+applyFilters();
+</script>
+{% endblock %}

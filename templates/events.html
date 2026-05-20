@@ -1,0 +1,103 @@
+{% extends 'base.html' %}
+{% block title %}Events — Park Golf Ratings{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0">Events</h2>
+  {% if session.get('admin') %}
+  <a href="{{ url_for('add_tournament') }}" class="btn btn-success btn-sm">+ Add Event</a>
+  {% endif %}
+</div>
+
+<!-- Filter tabs -->
+<div class="btn-group mb-3" role="group" aria-label="Filter events">
+  <button type="button" class="btn btn-outline-secondary active" id="filter-all">All Events</button>
+  <button type="button" class="btn btn-outline-secondary" id="filter-tournament">Tournaments</button>
+  <button type="button" class="btn btn-outline-secondary" id="filter-flex">Flex League</button>
+  <button type="button" class="btn btn-outline-secondary" id="filter-monday">Monday Night League</button>
+  <button type="button" class="btn btn-outline-secondary" id="filter-travelers">Traveler's League</button>
+</div>
+
+{% if tournaments %}
+<div class="list-group" id="events-list">
+  {% for t in tournaments %}
+  <a href="{{ url_for('tournament', tournament_id=t.id) }}"
+     class="list-group-item list-group-item-action d-flex justify-content-between align-items-center py-3"
+     data-league-key="{% if t.league == 'Flex League' %}flex{% elif t.league == 'Monday Night League' %}monday{% elif t.league == "IPGAA Traveler's League" %}travelers{% else %}tournament{% endif %}">
+    <div>
+      <div class="fw-semibold">{{ t.name }}</div>
+      <div class="text-muted small">{{ t.course_name }} · {{ t.date }} · {{ t.num_rounds }} round{% if t.num_rounds != 1 %}s{% endif %}</div>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      {% if t.league %}
+        <span class="badge rounded-pill
+          {% if t.league == 'Flex League' %}bg-primary
+          {% elif t.league == 'Monday Night League' %}bg-warning text-dark
+          {% elif t.league == "IPGAA Traveler's League" %}bg-danger
+          {% else %}bg-secondary{% endif %}">
+          {{ t.league }}
+        </span>
+      {% else %}
+        <span class="badge rounded-pill bg-success">Tournament</span>
+      {% endif %}
+      <span class="badge bg-secondary rounded-pill">{{ t.num_players }} players</span>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+<p class="text-muted small mt-2" id="no-results-msg" style="display:none">No events match this filter.</p>
+{% else %}
+<div class="text-center text-muted py-5">
+  <p class="fs-5">No events yet.</p>
+  {% if session.get('admin') %}
+  <a href="{{ url_for('add_tournament') }}" class="btn btn-success">Add First Event</a>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const filters = [
+    { id: 'filter-all',        key: 'all' },
+    { id: 'filter-tournament', key: 'tournament' },
+    { id: 'filter-flex',       key: 'flex' },
+    { id: 'filter-monday',     key: 'monday' },
+    { id: 'filter-travelers',  key: 'travelers' },
+  ];
+
+  const items = Array.from(document.querySelectorAll('#events-list [data-league-key]'));
+  const noResults = document.getElementById('no-results-msg');
+
+  function applyFilter(key) {
+    // Update active button
+    filters.forEach(f => {
+      const btn = document.getElementById(f.id);
+      if (btn) btn.classList.toggle('active', f.key === key);
+    });
+
+    // Show/hide list items (use d-none/d-flex toggle to beat Bootstrap's !important)
+    let visible = 0;
+    items.forEach(item => {
+      const show = key === 'all' || item.dataset.leagueKey === key;
+      if (show) {
+        item.classList.remove('d-none');
+        item.classList.add('d-flex');
+      } else {
+        item.classList.add('d-none');
+        item.classList.remove('d-flex');
+      }
+      if (show) visible++;
+    });
+
+    if (noResults) noResults.style.display = visible === 0 ? '' : 'none';
+  }
+
+  filters.forEach(f => {
+    const btn = document.getElementById(f.id);
+    if (btn) btn.addEventListener('click', function () { applyFilter(f.key); });
+  });
+})();
+</script>
+{% endblock %}

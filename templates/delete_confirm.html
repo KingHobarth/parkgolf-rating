@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+{% block title %}Delete Tournament — Park Golf Ratings{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{{ url_for('events') }}">Events</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('tournament', tournament_id=t.id) }}">{{ t.name }}</a></li>
+    <li class="breadcrumb-item active">Delete</li>
+  </ol>
+</nav>
+
+<div class="card border-danger shadow-sm" style="max-width:520px">
+  <div class="card-header bg-danger text-white fw-bold fs-5">⚠️ Delete Tournament</div>
+  <div class="card-body">
+    <p class="mb-3">Are you sure you want to permanently delete this tournament?</p>
+    <ul class="list-unstyled mb-4 ps-1">
+      <li class="mb-1"><span class="text-muted">Name:</span> <strong>{{ t.name }}</strong></li>
+      <li class="mb-1"><span class="text-muted">Course:</span> {{ t.course_name }}</li>
+      <li class="mb-1"><span class="text-muted">Date:</span> {{ t.date }}</li>
+      <li class="mb-1"><span class="text-muted">Players:</span> {{ player_count }}</li>
+      <li class="mb-1"><span class="text-muted">Rounds recorded:</span> {{ round_count }}</li>
+    </ul>
+    <p class="text-danger small fw-semibold mb-4">
+      All {{ round_count }} round records will be removed and all player ratings will be recalculated.
+      This cannot be undone.
+    </p>
+    <form method="post" class="d-flex gap-2">
+      <button type="submit" class="btn btn-danger">Yes, Delete Tournament</button>
+      <a href="{{ url_for('tournament', tournament_id=t.id) }}" class="btn btn-outline-secondary">Cancel</a>
+    </form>
+  </div>
+</div>
+{% endblock %}

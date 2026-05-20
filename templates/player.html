@@ -1,0 +1,242 @@
+{% extends 'base.html' %}
+{% block title %}{{ player.name }} — Park Golf Ratings{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Leaderboard</a></li>
+    <li class="breadcrumb-item active">{{ player.name }}</li>
+  </ol>
+</nav>
+
+<h2>
+  {{ player.name }}
+  <span class="badge {% if player.division == 'Women' %}bg-danger{% else %}bg-primary{% endif %} fs-6 ms-1 align-middle">
+    {{ player.division or 'Men' }}
+  </span>
+</h2>
+
+{% if stats and stats.num_rounds %}
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="card text-center border-success">
+      <div class="card-body py-3">
+        <div class="fs-1 fw-bold text-success">{{ stats.rating }}</div>
+        <div class="text-muted small">Player Rating</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center">
+      <div class="card-body py-3">
+        <div class="fs-1 fw-bold">{{ stats.num_rounds }}</div>
+        <div class="text-muted small">
+          Rounds Used
+          {% if stats.excluded > 0 %}
+            <br><span class="text-warning small">{{ stats.excluded }} excl.</span>
+          {% endif %}
+          {% if stats.expired > 0 %}
+            <br><span class="text-secondary small">{{ stats.expired }} expired</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center">
+      <div class="card-body py-3">
+        <div class="fs-1 fw-bold text-primary">{{ stats.best_rating }}</div>
+        <div class="text-muted small">Best Round</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center">
+      <div class="card-body py-3">
+        <div class="fs-1 fw-bold text-secondary">{{ stats.worst_rating }}</div>
+        <div class="text-muted small">Worst Round</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if stats.excluded > 0 or stats.expired > 0 or recent_count %}
+<div class="mb-3 d-flex gap-3 flex-wrap">
+  {% if recent_count %}
+  <span class="small text-muted"><span class="badge bg-success bg-opacity-25 text-success border border-success fw-bold">2×</span> Most recent 25% of rounds, up to {{ recent_count }} (double weight)</span>
+  {% endif %}
+  {% if stats.excluded > 0 %}
+  <span class="small text-muted"><span class="badge bg-warning text-dark">excl.</span> Excluded — more than 2σ below your mean</span>
+  {% endif %}
+  {% if stats.expired > 0 %}
+  <span class="small text-muted"><span class="badge bg-secondary">old</span> Older than 2 years — not counted in rating</span>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if chart_data and chart_data | length > 1 %}
+<h5 class="mt-4">Rating Trend</h5>
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <canvas id="ratingChart" height="90"></canvas>
+  </div>
+  <div class="card-footer bg-transparent border-0 d-flex flex-wrap gap-3 small text-muted py-2">
+    <span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#0d6efd;vertical-align:middle"></span> Normal round</span>
+    <span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#198754;vertical-align:middle"></span> Recent (2× weight)</span>
+    <span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#fd7e14;vertical-align:middle"></span> Excluded (outlier)</span>
+    <span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#adb5bd;vertical-align:middle"></span> Expired (&gt;2 yrs)</span>
+    <span><span style="display:inline-block;width:22px;height:2px;background:#0d6efd;vertical-align:middle;margin-bottom:1px"></span> Official rating over time</span>
+  </div>
+</div>
+{% endif %}
+
+<h5>Round History</h5>
+<div class="table-responsive">
+  <table class="table table-sm table-hover" data-sortable>
+    <thead class="table-light">
+      <tr>
+        <th data-sort>Tournament</th>
+        <th data-sort>Course</th>
+        <th data-sort>Date</th>
+        <th class="text-center" data-sort>Rnd</th>
+        <th class="text-center" data-sort>Score</th>
+        <th class="text-center" data-sort>Rating</th>
+        <th class="text-center">Wt</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rounds %}
+      {% set is_excluded = r.round_id in excluded_ids %}
+      {% set is_expired = r.round_id in expired_ids %}
+      {% set is_recent = r.round_id in recent_ids %}
+      <tr{% if is_excluded or is_expired %} class="opacity-50"{% endif %}>
+        <td>
+          <a href="{{ url_for('tournament', tournament_id=r.tournament_id) }}" class="text-decoration-none">
+            {{ r.tournament_name }}
+          </a>
+        </td>
+        <td class="text-muted small">{{ r.course_name }}</td>
+        <td class="text-muted small" data-val="{{ r.sort_date }}">{{ r.date }}</td>
+        <td class="text-center" data-val="{{ r.round_number }}">R{{ r.round_number }}</td>
+        <td class="text-center {% if is_excluded %}text-decoration-line-through text-muted{% endif %}">{{ r.score }}</td>
+        <td class="text-center" data-val="{{ r.rating }}">
+          {% if is_excluded %}
+            <span class="badge bg-warning text-dark" title="Excluded: &gt;2σ below your mean">{{ r.rating }} excl.</span>
+          {% elif is_expired %}
+            <span class="badge bg-secondary" title="Older than 2 years — not counted">{{ r.rating }} old</span>
+          {% else %}
+            <span class="badge {% if r.rating >= 1000 %}bg-success{% elif r.rating >= 950 %}bg-primary{% elif r.rating >= 900 %}bg-info text-dark{% else %}bg-secondary{% endif %}">
+              {{ r.rating }}
+            </span>
+          {% endif %}
+        </td>
+        <td class="text-center small text-muted">
+          {% if is_excluded or is_expired %}—
+          {% elif is_recent %}<span class="badge bg-success bg-opacity-25 text-success border border-success fw-bold">2×</span>
+          {% else %}1×{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="text-muted">No rounds recorded yet.</p>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if chart_data and chart_data | length > 1 %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+(function () {
+  const chartData = {{ chart_data | tojson }};
+
+  const statusColors = {
+    normal:   '#0d6efd',
+    recent:   '#198754',
+    excluded: '#fd7e14',
+    expired:  '#adb5bd',
+  };
+
+  const labels      = chartData.map(d => d.label);
+  const ratings     = chartData.map(d => d.rating);
+  const ptColors    = chartData.map(d => statusColors[d.status] || '#0d6efd');
+  const ptRadius    = chartData.map(d => d.status === 'excluded' || d.status === 'expired' ? 5 : 7);
+
+  // Rolling rating line: player's official rating as it evolved after each round
+  const rollingRatings = chartData.map(d => d.rolling_rating);
+  const hasRolling = rollingRatings.some(v => v !== null && v !== undefined);
+
+  const datasets = [
+    {
+      label: 'Round Rating',
+      data: ratings,
+      borderColor: '#dee2e6',
+      borderWidth: 2,
+      pointBackgroundColor: ptColors,
+      pointBorderColor: ptColors,
+      pointRadius: ptRadius,
+      pointHoverRadius: 9,
+      tension: 0.3,
+      fill: false,
+      order: 2,
+    },
+  ];
+
+  if (hasRolling) {
+    datasets.push({
+      label: 'Player Rating',
+      data: rollingRatings,
+      borderColor: '#0d6efd',
+      borderWidth: 2,
+      borderDash: [6, 4],
+      pointRadius: 3,
+      pointHoverRadius: 5,
+      pointBackgroundColor: '#0d6efd',
+      tension: 0.3,
+      fill: false,
+      order: 1,
+    });
+  }
+
+  new Chart(document.getElementById('ratingChart').getContext('2d'), {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: hasRolling },
+        tooltip: {
+          callbacks: {
+            title: (items) => {
+              const d = chartData[items[0].dataIndex];
+              return d.tournament + ' · R' + d.round;
+            },
+            label: (item) => {
+              if (item.datasetIndex === 0) {
+                const d = chartData[item.dataIndex];
+                const status = d.status !== 'normal' ? ` (${d.status})` : '';
+                return [`Round rating: ${d.rating}${status}`, `Score: ${d.score}`, d.date];
+              }
+              const d = chartData[item.dataIndex];
+              return `Official rating: ${d.rolling_rating}`;
+            },
+          },
+        },
+      },
+      scales: {
+        x: { ticks: { maxRotation: 45, font: { size: 11 } } },
+        y: {
+          beginAtZero: false,
+          title: { display: true, text: 'Rating', font: { size: 12 } },
+          ticks: { font: { size: 11 } },
+        },
+      },
+    },
+  });
+})();
+</script>
+{% endif %}
+{% endblock %}

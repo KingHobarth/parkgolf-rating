@@ -1,0 +1,121 @@
+{% extends 'base.html' %}
+{% block title %}Stats — Park Golf Ratings{% endblock %}
+
+{% block content %}
+<h2 class="mb-4">League Records</h2>
+
+{# ─── Reusable card macro ──────────────────────────────────────────────────── #}
+{% macro div_card(division, player) %}
+{% set is_women = division == 'Women' %}
+<div class="card shadow-sm h-100">
+  <div class="card-header fw-bold text-white d-flex align-items-center gap-2
+              {% if is_women %}bg-danger{% else %}bg-primary{% endif %}">
+    <span class="fs-5">{{ '♀' if is_women else '♂' }}</span>
+    <span>{{ division }}</span>
+  </div>
+  <div class="card-body text-center d-flex flex-column justify-content-center py-4">
+    {% if player %}
+      <a href="{{ url_for('player', player_id=player.player_id) }}"
+         class="text-decoration-none text-dark fw-bold fs-5 mb-2 lh-sm">
+        {{ player.name }}
+      </a>
+      {{ caller() }}
+    {% else %}
+      <p class="text-muted fst-italic mb-0">No data yet</p>
+    {% endif %}
+  </div>
+</div>
+{% endmacro %}
+
+{# ── Highest Player Rating Ever Held ─────────────────────────────────────── #}
+<h4 class="border-bottom pb-2 mb-3">🏅 Highest Player Rating Ever Held</h4>
+<p class="text-muted small mb-3">This record never drops — even if a player's current rating falls, their all-time peak stands.</p>
+<div class="row g-3 mb-5">
+  {% for div in ['Men', 'Women'] %}
+  {% set p = peak_rating[div] %}
+  <div class="col-md-6">
+    {% call div_card(div, p) %}
+      <div class="display-4 fw-bold my-2 {% if div == 'Women' %}text-danger{% else %}text-primary{% endif %}">
+        {{ p.peak_rating }}
+      </div>
+      <div class="text-muted small">All-Time Peak Rating</div>
+    {% endcall %}
+  </div>
+  {% endfor %}
+</div>
+
+{# ── Best Single Round Rating ─────────────────────────────────────────────── #}
+<h4 class="border-bottom pb-2 mb-3">🏆 Best Single Round Rating</h4>
+<div class="row g-3 mb-5">
+  {% for div in ['Men', 'Women'] %}
+  {% set p = best_round[div] %}
+  <div class="col-md-6">
+    {% call div_card(div, p) %}
+      <div class="display-4 fw-bold my-2 {% if div == 'Women' %}text-danger{% else %}text-primary{% endif %}">
+        {{ p.rating }}
+      </div>
+      <div class="text-muted small mb-1">Score: <strong>{{ p.score }}</strong> · R{{ p.round_number }}</div>
+      <div class="text-muted small mb-1">{{ p.tournament_name }}</div>
+      <div class="text-muted small">{{ p.course_name }}</div>
+    {% endcall %}
+  </div>
+  {% endfor %}
+</div>
+
+{# ── Most Rounds Played ───────────────────────────────────────────────────── #}
+<h4 class="border-bottom pb-2 mb-3">📊 Most Rounds Played</h4>
+<div class="row g-3 mb-5">
+  {% for div in ['Men', 'Women'] %}
+  {% set p = most_rounds[div] %}
+  <div class="col-md-6">
+    {% call div_card(div, p) %}
+      <div class="display-4 fw-bold my-2 {% if div == 'Women' %}text-danger{% else %}text-primary{% endif %}">
+        {{ p.num_rounds }}
+      </div>
+      <div class="text-muted small">rounds played</div>
+    {% endcall %}
+  </div>
+  {% endfor %}
+</div>
+
+{# ── Most 1000+ Rated Rounds ─────────────────────────────────────────────── #}
+<h4 class="border-bottom pb-2 mb-3">⭐ Most 1000+ Rated Rounds</h4>
+<div class="row g-3 mb-5">
+  {% for div in ['Men', 'Women'] %}
+  {% set p = elite_rounds[div] %}
+  <div class="col-md-6">
+    {% call div_card(div, p) %}
+      <div class="display-4 fw-bold my-2 {% if div == 'Women' %}text-danger{% else %}text-primary{% endif %}">
+        {{ p.elite_count }}
+      </div>
+      <div class="text-muted small">rounds rated 1000 or higher</div>
+    {% endcall %}
+  </div>
+  {% endfor %}
+</div>
+
+{# ── Course Records ───────────────────────────────────────────────────────── #}
+{% for course_name, records in course_records.items() %}
+<h4 class="border-bottom pb-2 mb-3">🎯 Course Record — {{ course_name }}</h4>
+<div class="row g-3 mb-5">
+  {% for div in ['Men', 'Women'] %}
+  {% set p = records[div] %}
+  <div class="col-md-6">
+    {% call div_card(div, p) %}
+      <div class="display-4 fw-bold my-2 {% if div == 'Women' %}text-danger{% else %}text-primary{% endif %}">
+        {{ p.score }}
+      </div>
+      <div class="text-muted small mb-1">
+        Rating:
+        <span class="badge {% if p.rating >= 1000 %}bg-success{% elif p.rating >= 950 %}bg-primary{% elif p.rating >= 900 %}bg-info text-dark{% else %}bg-secondary{% endif %}">
+          {{ p.rating }}
+        </span>
+      </div>
+      <div class="text-muted small">{{ p.tournament_name }}</div>
+    {% endcall %}
+  </div>
+  {% endfor %}
+</div>
+{% endfor %}
+
+{% endblock %}

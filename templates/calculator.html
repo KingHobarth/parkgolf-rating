@@ -1,0 +1,100 @@
+{% extends 'base.html' %}
+{% block title %}Rating Calculator — Park Golf Ratings{% endblock %}
+
+{% block content %}
+<h2 class="mb-4">Rating Calculator</h2>
+<p class="text-muted">See what rating any score would receive on either course.</p>
+
+<div class="row">
+  <div class="col-md-5">
+    <div class="card">
+      <div class="card-body">
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Course</label>
+          <select id="calc-course" class="form-select form-select-lg">
+            {% for c in courses %}
+            <option value="{{ c.course_rating }}" data-name="{{ c.name }}">{{ c.name }} (CR: {{ c.course_rating }})</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Score</label>
+          <input type="number" id="calc-score" class="form-control form-control-lg text-center" min="1" max="150" placeholder="Enter score">
+        </div>
+        <div id="calc-result" class="text-center py-3 d-none">
+          <div class="text-muted small mb-1" id="calc-formula"></div>
+          <div class="display-3 fw-bold" id="calc-rating"></div>
+          <div class="text-muted" id="calc-label"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mt-3">
+      <div class="card-header fw-semibold">Quick Reference</div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0" id="ref-table">
+          <thead class="table-light">
+            <tr>
+              <th>Score</th>
+              <th class="text-center">Rating</th>
+              <th>Score</th>
+              <th class="text-center">Rating</th>
+            </tr>
+          </thead>
+          <tbody id="ref-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const courseSelect = document.getElementById('calc-course');
+const scoreInput = document.getElementById('calc-score');
+const resultDiv = document.getElementById('calc-result');
+
+function calculate() {
+  const cr = parseInt(courseSelect.value);
+  const score = parseInt(scoreInput.value);
+  if (isNaN(score) || score < 1) { resultDiv.classList.add('d-none'); return; }
+  const rating = 1000 + (cr - score) * 10;
+  document.getElementById('calc-formula').textContent =
+    `1000 + (${cr} − ${score}) × 10`;
+  document.getElementById('calc-rating').textContent = rating;
+  const label = rating >= 1050 ? '🔥 Elite' : rating >= 1000 ? '✅ Above Average' : rating >= 950 ? '📊 Average' : '📉 Below Average';
+  document.getElementById('calc-label').textContent = label;
+  const el = document.getElementById('calc-rating');
+  el.className = rating >= 1000 ? 'display-3 fw-bold text-success' : rating >= 950 ? 'display-3 fw-bold text-primary' : 'display-3 fw-bold text-secondary';
+  resultDiv.classList.remove('d-none');
+  buildRefTable(cr);
+}
+
+function buildRefTable(cr) {
+  const tbody = document.getElementById('ref-body');
+  tbody.innerHTML = '';
+  const scores = [];
+  for (let s = cr - 10; s <= cr + 15; s++) scores.push(s);
+  for (let i = 0; i < scores.length; i += 2) {
+    const tr = document.createElement('tr');
+    const s1 = scores[i], r1 = 1000 + (cr - s1) * 10;
+    const s2 = scores[i+1] !== undefined ? scores[i+1] : null;
+    const r2 = s2 !== null ? 1000 + (cr - s2) * 10 : null;
+    tr.innerHTML = `
+      <td>${s1}</td>
+      <td class="text-center"><span class="badge ${r1 >= 1000 ? 'bg-success' : r1 >= 950 ? 'bg-primary' : 'bg-secondary'}">${r1}</span></td>
+      <td>${s2 !== null ? s2 : ''}</td>
+      <td class="text-center">${r2 !== null ? `<span class="badge ${r2 >= 1000 ? 'bg-success' : r2 >= 950 ? 'bg-primary' : 'bg-secondary'}">${r2}</span>` : ''}</td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
+courseSelect.addEventListener('change', () => { calculate(); buildRefTable(parseInt(courseSelect.value)); });
+scoreInput.addEventListener('input', calculate);
+
+// Init ref table on load
+buildRefTable(parseInt(courseSelect.value));
+</script>
+{% endblock %}

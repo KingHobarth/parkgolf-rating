@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+{% block title %}Flex League Standings — Park Golf{% endblock %}
+
+{% block content %}
+<h2 class="mb-1">Flex League Standings</h2>
+<p class="text-muted mb-4">Top 8 finishes count &nbsp;·&nbsp; Points per finish: 1st&nbsp;100, 2nd&nbsp;90, 3rd&nbsp;85, then −5 per place &nbsp;·&nbsp; Ties averaged</p>
+
+{% if not standings.tournaments %}
+  <div class="alert alert-info">No Flex League tournaments have been recorded yet.</div>
+{% else %}
+
+{% for division in ['Men', 'Women'] %}
+{% set rows = standings[division] %}
+{% if rows %}
+<div class="card mb-5">
+  <div class="card-header fw-semibold fs-5">{{ division }}'s Division</div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0 align-middle">
+        <thead class="table-success">
+          <tr>
+            <th class="text-center" style="width:48px">Rank</th>
+            <th>Player</th>
+            <th class="text-center">Total Pts</th>
+            <th class="text-center text-muted small" style="width:72px">Events</th>
+            {% for t in standings.tournaments %}
+            <th class="text-center small" style="min-width:72px" title="{{ t.date }}">
+              {{ t.name }}<br>
+              <span class="text-muted fw-normal" style="font-size:.75em">{{ t.date }}</span>
+            </th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in rows %}
+          <tr>
+            <td class="text-center fw-semibold">{{ loop.index }}</td>
+            <td><a href="{{ url_for('player', player_id=p.player_id) }}" class="text-decoration-none">{{ p.name }}</a></td>
+            <td class="text-center fw-bold">{{ p.total_points }}</td>
+            <td class="text-center text-muted small">{{ p.events_played }}</td>
+            {% for t in standings.tournaments %}
+              {% set w = p.weekly[t.id] %}
+              {% if w.points is none %}
+                <td class="text-center text-muted">—</td>
+              {% elif w.counted %}
+                <td class="text-center fw-semibold text-success">{{ w.points }}</td>
+              {% else %}
+                <td class="text-center text-muted" style="text-decoration:line-through" title="Not counted (outside top 8)">{{ w.points }}</td>
+              {% endif %}
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endfor %}
+
+<div class="text-muted small mt-2">
+  <span class="fw-semibold text-success">Green</span> = counted finish &nbsp;·&nbsp;
+  <span style="text-decoration:line-through">Strikethrough</span> = outside top 8, not counted &nbsp;·&nbsp;
+  — = did not play
+</div>
+
+{% endif %}
+{% endblock %}

@@ -1,0 +1,196 @@
+{% extends 'base.html' %}
+{% block title %}Add Tournament — Park Golf Ratings{% endblock %}
+
+{% block content %}
+<h2 class="mb-4">Add Tournament</h2>
+
+<!-- Datalist for player name autocomplete -->
+<datalist id="player-names">
+  {% for p in all_players %}
+  <option value="{{ p.name }}" data-division="{{ p.division }}">
+  {% endfor %}
+</datalist>
+
+<form method="post" id="tournament-form">
+  <div class="card mb-4">
+    <div class="card-header fw-semibold">Tournament Info</div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label">Tournament Name</label>
+          <input type="text" name="name" class="form-control" placeholder="e.g. Spring Open" required>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Course</label>
+          <select name="course_id" id="course-select" class="form-select" required>
+            <option value="">Select course…</option>
+            {% for c in courses %}
+            <option value="{{ c.id }}" data-rating="{{ c.course_rating }}">{{ c.name }} (CR: {{ c.course_rating }})</option>
+            {% endfor %}
+            <option value="new">＋ Add new course…</option>
+          </select>
+        </div>
+
+        <!-- New course fields (hidden until "+ Add new course" selected) -->
+        <div class="col-12" id="new-course-fields" style="display:none">
+          <div class="card border-success">
+            <div class="card-header text-success fw-semibold py-2">New Course</div>
+            <div class="card-body">
+              <div class="row g-3">
+                <div class="col-md-5">
+                  <label class="form-label">Course Name <span class="text-danger">*</span></label>
+                  <input type="text" name="new_course_name" id="new-course-name" class="form-control" placeholder="e.g. Riverside Park Golf">
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">Location</label>
+                  <input type="text" name="new_course_location" class="form-control" placeholder="e.g. Riverside Park">
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label">Initial Scratch Rating</label>
+                  <input type="number" name="new_course_rating" class="form-control" placeholder="e.g. 46" min="1" max="200" step="0.1">
+                  <div class="form-text">Will auto-update after rounds are saved.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Date</label>
+          <input type="date" name="date" class="form-control" required>
+        </div>
+        <div class="col-md-1">
+          <label class="form-label">Rounds</label>
+          <select name="num_rounds" id="num-rounds" class="form-select" required>
+            <option value="1">1</option>
+            <option value="2" selected>2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">League</label>
+          <select name="league" class="form-select">
+            <option value="">— No league —</option>
+            <option value="Flex League">Flex League</option>
+            <option value="Monday Night League">Monday Night League</option>
+            <option value="IPGAA Traveler's League">IPGAA Traveler's League</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span class="fw-semibold">Player Scores</span>
+      <button type="button" class="btn btn-outline-success btn-sm" id="add-player-btn">+ Add Player</button>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm mb-0" id="players-table">
+          <thead class="table-light">
+            <tr>
+              <th style="width:200px">Player Name</th>
+              <th style="width:100px">Division</th>
+              <th id="header-r1" class="text-center" style="width:90px">Round 1</th>
+              <th id="header-r2" class="text-center" style="width:90px">Round 2</th>
+              <th id="header-r3" class="text-center d-none" style="width:90px">Round 3</th>
+              <th id="header-r4" class="text-center d-none" style="width:90px">Round 4</th>
+              <th style="width:40px"></th>
+            </tr>
+          </thead>
+          <tbody id="players-body">
+            <!-- rows added by JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <button type="submit" class="btn btn-success px-4">Save Tournament</button>
+  <a href="{{ url_for('events') }}" class="btn btn-link text-muted">Cancel</a>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let playerCount = 0;
+let numRounds = parseInt(document.getElementById('num-rounds').value);
+
+// Build a lookup: player name (lowercase) → division
+const playerDivisions = {};
+{% for p in all_players %}
+playerDivisions[{{ p.name | tojson }}.toLowerCase()] = {{ p.division | tojson }};
+{% endfor %}
+
+function updateRoundHeaders() {
+  numRounds = parseInt(document.getElementById('num-rounds').value);
+  for (let r = 1; r <= 4; r++) {
+    const th = document.getElementById('header-r' + r);
+    if (r <= numRounds) th.classList.remove('d-none');
+    else th.classList.add('d-none');
+  }
+  document.querySelectorAll('.round-cell').forEach(cell => {
+    const rn = parseInt(cell.dataset.round);
+    if (rn <= numRounds) cell.classList.remove('d-none');
+    else cell.classList.add('d-none');
+  });
+}
+
+function addPlayerRow() {
+  const i = playerCount++;
+  const tbody = document.getElementById('players-body');
+  const tr = document.createElement('tr');
+
+  let roundCells = '';
+  for (let r = 1; r <= 4; r++) {
+    roundCells += `<td class="round-cell text-center ${r > numRounds ? 'd-none' : ''}" data-round="${r}">
+      <input type="number" name="score_${i}_${r}" class="form-control form-control-sm text-center" min="1" max="150" placeholder="—">
+    </td>`;
+  }
+
+  tr.innerHTML = `
+    <td>
+      <input type="text" name="player_name" list="player-names"
+             class="form-control form-control-sm player-name-input" placeholder="Player name" required>
+    </td>
+    <td>
+      <select name="division_${i}" class="form-select form-select-sm division-select">
+        <option value="Men">Men</option>
+        <option value="Women">Women</option>
+      </select>
+    </td>
+    ${roundCells}
+    <td><button type="button" class="btn btn-link text-danger btn-sm p-0" onclick="this.closest('tr').remove()">✕</button></td>
+  `;
+  tbody.appendChild(tr);
+
+  // Auto-fill division when a known player name is typed/selected
+  const nameInput = tr.querySelector('.player-name-input');
+  const divSelect = tr.querySelector('.division-select');
+  nameInput.addEventListener('input', function () {
+    const div = playerDivisions[this.value.trim().toLowerCase()];
+    if (div) divSelect.value = div;
+  });
+
+  nameInput.focus();
+}
+
+document.getElementById('num-rounds').addEventListener('change', updateRoundHeaders);
+document.getElementById('add-player-btn').addEventListener('click', addPlayerRow);
+
+// Show/hide new course fields
+const courseSelect = document.getElementById('course-select');
+const newCourseFields = document.getElementById('new-course-fields');
+const newCourseName = document.getElementById('new-course-name');
+
+courseSelect.addEventListener('change', function () {
+  const isNew = this.value === 'new';
+  newCourseFields.style.display = isNew ? '' : 'none';
+  newCourseName.required = isNew;
+});
+
+// Start with 3 rows
+addPlayerRow(); addPlayerRow(); addPlayerRow();
+</script>
+{% endblock %}

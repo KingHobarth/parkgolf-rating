@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block title %}Tournaments — Park Golf Ratings{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0">Tournaments</h2>
+  <a href="{{ url_for('add_tournament') }}" class="btn btn-success btn-sm">+ Add Tournament</a>
+</div>
+
+{% if tournaments %}
+<div class="list-group">
+  {% for t in tournaments %}
+  <a href="{{ url_for('tournament', tournament_id=t.id) }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center py-3">
+    <div>
+      <div class="fw-semibold">{{ t.name }}</div>
+      <div class="text-muted small">{{ t.course_name }} · {{ t.date }} · {{ t.num_rounds }} round{% if t.num_rounds != 1 %}s{% endif %}</div>
+    </div>
+    <span class="badge bg-secondary rounded-pill">{{ t.num_players }} players</span>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="text-center text-muted py-5">
+  <p class="fs-5">No tournaments yet.</p>
+  <a href="{{ url_for('add_tournament') }}" class="btn btn-success">Add First Tournament</a>
+</div>
+{% endif %}
+{% endblock %}

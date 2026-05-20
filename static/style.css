@@ -1,0 +1,22 @@
+body {
+  background: #f8faf8;
+}
+
+.navbar-brand {
+  font-size: 1.2rem;
+  letter-spacing: 0.5px;
+}
+
+.badge.fs-6 {
+  min-width: 64px;
+  font-size: 0.95rem !important;
+}
+
+.card {
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.07);
+}
+
+.table > :not(caption) > * > * {
+  padding: 0.6rem 0.75rem;
+}
