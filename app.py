@@ -521,8 +521,8 @@ def recalculate_ratings(db):
             rated_rows = [r for r in round_rows if r['player_id'] in player_ratings]
 
             if first_round_ever:
-                # Seed: assume a score of 56 = 1000 for the very first round
-                eff_scratch = 56.0
+                # Seed: assume a score of 59 = 1000 for the very first round
+                eff_scratch = 59.0
                 first_round_ever = False
                 is_rated = True
             elif len(rated_rows) >= 3:
