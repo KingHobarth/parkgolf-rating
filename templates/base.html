@@ -16,7 +16,7 @@
       </button>
       <div class="collapse navbar-collapse" id="nav">
         <ul class="navbar-nav ms-auto">
-          <li class="nav-item"><a class="nav-link" href="{{ url_for('index') }}">Leaderboard</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('leaderboard') }}">Leaderboard</a></li>
           <li class="nav-item"><a class="nav-link" href="{{ url_for('events') }}">Events</a></li>
           {% if session.get('admin') %}
           <li class="nav-item"><a class="nav-link" href="{{ url_for('add_tournament') }}">Add Tournament</a></li>
@@ -36,6 +36,8 @@
       </div>
     </div>
   </nav>
+
+  {% block hero %}{% endblock %}
 
   <div class="container mt-4 mb-5">
     {% with messages = get_flashed_messages(with_categories=true) %}

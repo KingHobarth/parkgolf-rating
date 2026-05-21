@@ -625,7 +625,7 @@ def admin_required(f):
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if session.get('admin'):
-        return redirect(url_for('index'))
+        return redirect(url_for("leaderboard"))
     if request.method == 'POST':
         if request.form.get('password') == ADMIN_PASSWORD:
             session['admin'] = True
@@ -639,13 +639,18 @@ def login():
 def logout():
     session.pop('admin', None)
     flash('Logged out.', 'info')
-    return redirect(url_for('index'))
+    return redirect(url_for("leaderboard"))
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 
 @app.route('/')
 def index():
+    return render_template('landing.html')
+
+
+@app.route('/leaderboard')
+def leaderboard():
     db = get_db()
 
     # Available seasons for the year filter
@@ -720,7 +725,7 @@ def player(player_id):
     db = get_db()
     p = db.execute('SELECT * FROM players WHERE id = ?', (player_id,)).fetchone()
     if not p:
-        return redirect(url_for('index'))
+        return redirect(url_for("leaderboard"))
 
     rounds_raw = fetch_rounds_for_rating(db, player_id)
     result = compute_player_rating(rounds_raw)
@@ -1264,7 +1269,7 @@ def reset_baselines():
     db.execute('UPDATE players SET previous_rating = current_rating, peak_rating = current_rating')
     db.commit()
     flash('Baselines reset — rating change indicators and peak ratings have been corrected.', 'success')
-    return redirect(url_for('index'))
+    return redirect(url_for("leaderboard"))
 
 
 @app.route('/calculator')
