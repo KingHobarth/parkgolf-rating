@@ -1005,7 +1005,6 @@ def add_tournament():
 @app.route('/stats')
 def stats():
     db = get_db()
-    cutoff = age_cutoff()
 
     def top1_by_div(rows):
         """Return {'Men': first_men_row, 'Women': first_women_row} from an ordered list."""
@@ -1040,30 +1039,28 @@ def stats():
     ''').fetchall()
     best_round = top1_by_div(best_round_raw)
 
-    # Most rounds played (active / non-expired only, within 1 year)
+    # Most rounds played (all time)
     most_rounds_raw = db.execute('''
         SELECT p.id AS player_id, p.name, p.division,
                COUNT(r.id) AS num_rounds
         FROM rounds r
         JOIN players p ON p.id = r.player_id
-        JOIN tournaments t ON t.id = r.tournament_id
-        WHERE t.sort_date >= ? AND r.is_nr = 0
+        WHERE r.is_nr = 0
         GROUP BY p.id
         ORDER BY num_rounds DESC
-    ''', (cutoff,)).fetchall()
+    ''').fetchall()
     most_rounds = top1_by_div(most_rounds_raw)
 
-    # Most 1000+ rated rounds (active only, within 1 year)
+    # Most 1000+ rated rounds (all time)
     elite_raw = db.execute('''
         SELECT p.id AS player_id, p.name, p.division,
                COUNT(r.id) AS elite_count
         FROM rounds r
         JOIN players p ON p.id = r.player_id
-        JOIN tournaments t ON t.id = r.tournament_id
-        WHERE r.rating >= 1000 AND t.sort_date >= ? AND r.is_nr = 0
+        WHERE r.rating >= 1000 AND r.is_nr = 0
         GROUP BY p.id
         ORDER BY elite_count DESC
-    ''', (cutoff,)).fetchall()
+    ''').fetchall()
     elite_rounds = top1_by_div(elite_raw)
 
     # Lowest score per course — #1 per division
