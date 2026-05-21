@@ -544,16 +544,23 @@ def recalculate_ratings(db):
         'SELECT id, sort_date FROM tournaments ORDER BY sort_date, id'
     ).fetchall()
 
-    # Pre-seed known elite players at 1000 so the very first round can be
-    # calibrated using the ≥3 established players formula rather than a fixed scratch.
-    # Their pre-seed ratings are replaced by real computed ratings after round 1.
-    seed_names = ['Hobart Shaw', 'Brandon Nihiser', 'Taylor Junge']
+    # Pre-seed known players so the very first round can be calibrated.
+    # Elite players seeded at 1000; mid-tier players seeded at 900.
+    # These seeds are replaced by real computed ratings after their first round.
+    seeds = {
+        'Hobart Shaw': 1000.0,
+        'Brandon Nihiser': 1000.0,
+        'Taylor Junge': 1000.0,
+        'Christine Shaw': 900.0,
+        'Erin Spires': 900.0,
+        'Frank Todaro': 900.0,
+    }
     seed_rows = db.execute(
-        'SELECT id FROM players WHERE name IN ({})'.format(
-            ','.join('?' * len(seed_names))
-        ), seed_names
+        'SELECT id, name FROM players WHERE name IN ({})'.format(
+            ','.join('?' * len(seeds))
+        ), list(seeds.keys())
     ).fetchall()
-    player_ratings = {r['id']: 1000.0 for r in seed_rows}
+    player_ratings = {r['id']: seeds[r['name']] for r in seed_rows}
     player_round_history = {}  # {player_id: [round dicts]} — fed into compute_player_rating
 
     for t in tournaments:
@@ -576,16 +583,43 @@ def recalculate_ratings(db):
             rated_rows = [r for r in round_rows if r['player_id'] in player_ratings]
 
             if len(rated_rows) >= 3:
-                avg_score  = sum(r['score'] for r in rated_rows) / len(rated_rows)
-                avg_rating = sum(player_ratings[r['player_id']] for r in rated_rows) / len(rated_rows)
-                eff_scratch = avg_score + (avg_rating - 1000) / 10
+                scores_all  = [r['score'] for r in rated_rows]
+                ratings_all = [player_ratings[r['player_id']] for r in rated_rows]
+                avg_score_all  = sum(scores_all)  / len(scores_all)
+                avg_rating_all = sum(ratings_all) / len(ratings_all)
+
+                # Dynamic slope: split rated players into top/bottom halves by rating.
+                # Need ≥5 rated players; otherwise fall back to fixed slope of 10.
+                if len(rated_rows) >= 5:
+                    sorted_rated = sorted(rated_rows, key=lambda r: player_ratings[r['player_id']], reverse=True)
+                    n = len(sorted_rated)
+                    # Allow overlap at the midpoint so both halves always have ≥2 players
+                    split = (n + 1) // 2
+                    top_half    = sorted_rated[:split]
+                    bottom_half = sorted_rated[n - split:]
+
+                    avg_rating_top    = sum(player_ratings[r['player_id']] for r in top_half)    / len(top_half)
+                    avg_score_top     = sum(r['score'] for r in top_half)    / len(top_half)
+                    avg_rating_bottom = sum(player_ratings[r['player_id']] for r in bottom_half) / len(bottom_half)
+                    avg_score_bottom  = sum(r['score'] for r in bottom_half) / len(bottom_half)
+
+                    score_spread = avg_score_bottom - avg_score_top
+                    if score_spread > 0:
+                        slope = (avg_rating_top - avg_rating_bottom) / score_spread
+                    else:
+                        slope = 10.0  # guard against zero spread
+                else:
+                    slope = 10.0
+
+                # Anchor the 1000-scratch using all rated players + derived slope
+                eff_scratch = avg_score_all + (avg_rating_all - 1000) / slope
                 is_rated = True
             else:
                 is_rated = False
 
             if is_rated:
                 for r in round_rows:
-                    round_rating = round(1000 + (eff_scratch - r['score']) * 10)
+                    round_rating = round(1000 + (eff_scratch - r['score']) * slope)
                     db.execute('UPDATE rounds SET rating = ?, is_nr = 0 WHERE id = ?',
                                (round_rating, r['id']))
                     pid = r['player_id']
