@@ -47,18 +47,19 @@ def parse_sort_date(date_str):
 
 
 def age_cutoff():
-    """Return the YYYY-MM-DD string for exactly 2 years ago."""
+    """Return the YYYY-MM-DD string for exactly 1 year ago."""
     today = datetime.today()
     try:
-        return today.replace(year=today.year - 2).strftime('%Y-%m-%d')
+        return today.replace(year=today.year - 1).strftime('%Y-%m-%d')
     except ValueError:  # Feb 29 in a leap year
-        return today.replace(year=today.year - 2, day=28).strftime('%Y-%m-%d')
+        return today.replace(year=today.year - 1, day=28).strftime('%Y-%m-%d')
 
 
 def compute_player_rating(rounds):
     """
     Apply rating adjustments:
-      1. Drop rounds older than 2 years.
+      1. Players with 8+ rounds: drop rounds older than 1 year.
+         Players with 7 or fewer: keep all rounds regardless of age.
       2. Exclude rounds rated more than 2 std devs below the player's mean.
       3. Weight the most recent 25% of rounds (up to 8) 2x over older rounds.
 
@@ -68,9 +69,10 @@ def compute_player_rating(rounds):
     if not rounds:
         return {'rating': None, 'rounds_used': 0, 'excluded_ids': set()}
 
-    # Drop rounds older than 2 years
-    cutoff = age_cutoff()
-    rounds = [r for r in rounds if r.get('sort_date') and r['sort_date'] >= cutoff]
+    # Apply 1-year age cutoff only for players with 8+ recorded rounds
+    if len(rounds) >= 8:
+        cutoff = age_cutoff()
+        rounds = [r for r in rounds if r.get('sort_date') and r['sort_date'] >= cutoff]
 
     if not rounds:
         return {'rating': None, 'rounds_used': 0, 'excluded_ids': set()}
@@ -724,9 +726,13 @@ def player(player_id):
     result = compute_player_rating(rounds_raw)
     excluded_ids = result['excluded_ids']
 
-    # Rounds older than 2 years are expired (not counted in rating)
-    cutoff = age_cutoff()
-    expired_ids = {r['round_id'] for r in rounds_raw if not r.get('sort_date') or r['sort_date'] < cutoff}
+    # Rounds older than 1 year are expired — but only for players with 8+ rounds.
+    # Players with 7 or fewer keep all rounds regardless of age.
+    if len(rounds_raw) >= 8:
+        cutoff = age_cutoff()
+        expired_ids = {r['round_id'] for r in rounds_raw if not r.get('sort_date') or r['sort_date'] < cutoff}
+    else:
+        expired_ids = set()
 
     # recent_ids: top 25% (up to 8) of non-excluded, non-expired rounds
     active = [r for r in rounds_raw if r['round_id'] not in excluded_ids and r['round_id'] not in expired_ids]
@@ -1034,27 +1040,27 @@ def stats():
     ''').fetchall()
     best_round = top1_by_div(best_round_raw)
 
-    # Most rounds played (active / non-expired only)
+    # Most rounds played (active / non-expired only, within 1 year)
     most_rounds_raw = db.execute('''
         SELECT p.id AS player_id, p.name, p.division,
                COUNT(r.id) AS num_rounds
         FROM rounds r
         JOIN players p ON p.id = r.player_id
         JOIN tournaments t ON t.id = r.tournament_id
-        WHERE t.sort_date >= ?
+        WHERE t.sort_date >= ? AND r.is_nr = 0
         GROUP BY p.id
         ORDER BY num_rounds DESC
     ''', (cutoff,)).fetchall()
     most_rounds = top1_by_div(most_rounds_raw)
 
-    # Most 1000+ rated rounds (active only)
+    # Most 1000+ rated rounds (active only, within 1 year)
     elite_raw = db.execute('''
         SELECT p.id AS player_id, p.name, p.division,
                COUNT(r.id) AS elite_count
         FROM rounds r
         JOIN players p ON p.id = r.player_id
         JOIN tournaments t ON t.id = r.tournament_id
-        WHERE r.rating >= 1000 AND t.sort_date >= ?
+        WHERE r.rating >= 1000 AND t.sort_date >= ? AND r.is_nr = 0
         GROUP BY p.id
         ORDER BY elite_count DESC
     ''', (cutoff,)).fetchall()
