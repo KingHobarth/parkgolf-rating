@@ -497,9 +497,17 @@ def recalculate_ratings(db):
         'SELECT id, sort_date FROM tournaments ORDER BY sort_date, id'
     ).fetchall()
 
-    player_ratings = {}        # {player_id: current_rating} — updated after each rated round
+    # Pre-seed known elite players at 1000 so the very first round can be
+    # calibrated using the ≥3 established players formula rather than a fixed scratch.
+    # Their pre-seed ratings are replaced by real computed ratings after round 1.
+    seed_names = ['Hobart Shaw', 'Brandon Nihiser', 'Taylor Junge']
+    seed_rows = db.execute(
+        'SELECT id FROM players WHERE name IN ({})'.format(
+            ','.join('?' * len(seed_names))
+        ), seed_names
+    ).fetchall()
+    player_ratings = {r['id']: 1000.0 for r in seed_rows}
     player_round_history = {}  # {player_id: [round dicts]} — fed into compute_player_rating
-    first_round_ever = True
 
     for t in tournaments:
         tid = t['id']
@@ -520,12 +528,7 @@ def recalculate_ratings(db):
             # Players in this round who already have an established rating
             rated_rows = [r for r in round_rows if r['player_id'] in player_ratings]
 
-            if first_round_ever:
-                # Seed: assume a score of 59 = 1000 for the very first round
-                eff_scratch = 59.0
-                first_round_ever = False
-                is_rated = True
-            elif len(rated_rows) >= 3:
+            if len(rated_rows) >= 3:
                 avg_score  = sum(r['score'] for r in rated_rows) / len(rated_rows)
                 avg_rating = sum(player_ratings[r['player_id']] for r in rated_rows) / len(rated_rows)
                 eff_scratch = avg_score + (avg_rating - 1000) / 10
