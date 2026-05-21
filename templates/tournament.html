@@ -79,7 +79,12 @@
           {% if rn in r.rounds %}
             <td class="text-center" data-val="{{ r.rounds[rn].score }}">
               {{ r.rounds[rn].score }}
-              <br><small class="text-muted">{{ r.rounds[rn].rating }}</small>
+              <br>
+              {% if r.rounds[rn].is_nr %}
+                <small><span class="badge bg-secondary">NR</span></small>
+              {% else %}
+                <small class="text-muted">{{ r.rounds[rn].rating }}</small>
+              {% endif %}
             </td>
           {% else %}
             <td class="text-center text-muted">—</td>
@@ -88,10 +93,14 @@
         {% if round_numbers|length > 1 %}
         <td class="text-center fw-semibold">{{ r.total_score }}</td>
         {% endif %}
-        <td class="text-center" data-val="{{ r.avg_rating }}">
-          <span class="badge fs-6 {% if r.avg_rating >= 1000 %}bg-success{% elif r.avg_rating >= 950 %}bg-primary{% elif r.avg_rating >= 900 %}bg-info text-dark{% else %}bg-secondary{% endif %}">
-            {{ r.avg_rating }}
-          </span>
+        <td class="text-center" data-val="{{ r.avg_rating or 0 }}">
+          {% if r.avg_rating %}
+            <span class="badge fs-6 {% if r.avg_rating >= 1000 %}bg-success{% elif r.avg_rating >= 950 %}bg-primary{% elif r.avg_rating >= 900 %}bg-info text-dark{% else %}bg-secondary{% endif %}">
+              {{ r.avg_rating }}
+            </span>
+          {% else %}
+            <span class="badge fs-6 bg-secondary">NR</span>
+          {% endif %}
         </td>
       </tr>
       {% endfor %}

@@ -38,6 +38,9 @@
           {% if stats.expired > 0 %}
             <br><span class="text-secondary small">{{ stats.expired }} expired</span>
           {% endif %}
+          {% if stats.nr_count > 0 %}
+            <br><span class="text-secondary small">{{ stats.nr_count }} NR</span>
+          {% endif %}
         </div>
       </div>
     </div>
@@ -60,7 +63,7 @@
   </div>
 </div>
 
-{% if stats.excluded > 0 or stats.expired > 0 or recent_count %}
+{% if stats.excluded > 0 or stats.expired > 0 or stats.nr_count > 0 or recent_count %}
 <div class="mb-3 d-flex gap-3 flex-wrap">
   {% if recent_count %}
   <span class="small text-muted"><span class="badge bg-success bg-opacity-25 text-success border border-success fw-bold">2×</span> Most recent 25% of rounds, up to {{ recent_count }} (double weight)</span>
@@ -70,6 +73,9 @@
   {% endif %}
   {% if stats.expired > 0 %}
   <span class="small text-muted"><span class="badge bg-secondary">old</span> Older than 2 years — not counted in rating</span>
+  {% endif %}
+  {% if stats.nr_count > 0 %}
+  <span class="small text-muted"><span class="badge bg-secondary">NR</span> Not rated — fewer than 3 established players in round</span>
   {% endif %}
 </div>
 {% endif %}
@@ -106,10 +112,11 @@
     </thead>
     <tbody>
       {% for r in rounds %}
-      {% set is_excluded = r.round_id in excluded_ids %}
-      {% set is_expired = r.round_id in expired_ids %}
-      {% set is_recent = r.round_id in recent_ids %}
-      <tr{% if is_excluded or is_expired %} class="opacity-50"{% endif %}>
+      {% set is_nr = r.is_nr %}
+      {% set is_excluded = (not is_nr) and r.round_id in excluded_ids %}
+      {% set is_expired  = (not is_nr) and r.round_id in expired_ids %}
+      {% set is_recent   = (not is_nr) and r.round_id in recent_ids %}
+      <tr{% if is_excluded or is_expired or is_nr %} class="opacity-50"{% endif %}>
         <td>
           <a href="{{ url_for('tournament', tournament_id=r.tournament_id) }}" class="text-decoration-none">
             {{ r.tournament_name }}
@@ -119,8 +126,10 @@
         <td class="text-muted small" data-val="{{ r.sort_date }}">{{ r.date }}</td>
         <td class="text-center" data-val="{{ r.round_number }}">R{{ r.round_number }}</td>
         <td class="text-center {% if is_excluded %}text-decoration-line-through text-muted{% endif %}">{{ r.score }}</td>
-        <td class="text-center" data-val="{{ r.rating }}">
-          {% if is_excluded %}
+        <td class="text-center" data-val="{{ r.rating if not is_nr else 0 }}">
+          {% if is_nr %}
+            <span class="badge bg-secondary" title="Not rated — fewer than 3 established players in this round">NR</span>
+          {% elif is_excluded %}
             <span class="badge bg-warning text-dark" title="Excluded: &gt;2σ below your mean">{{ r.rating }} excl.</span>
           {% elif is_expired %}
             <span class="badge bg-secondary" title="Older than 2 years — not counted">{{ r.rating }} old</span>
@@ -131,7 +140,7 @@
           {% endif %}
         </td>
         <td class="text-center small text-muted">
-          {% if is_excluded or is_expired %}—
+          {% if is_nr or is_excluded or is_expired %}—
           {% elif is_recent %}<span class="badge bg-success bg-opacity-25 text-success border border-success fw-bold">2×</span>
           {% else %}1×{% endif %}
         </td>

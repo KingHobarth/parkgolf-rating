@@ -383,13 +383,19 @@ def init_db():
     if 'league' not in tourcols:
         db.execute("ALTER TABLE tournaments ADD COLUMN league TEXT")
 
-    # Migrate: rating_adjustment column on courses (stroke offset applied to SSA)
+    # Migrate: rating_adjustment column on courses (kept for potential future use)
     ccols = [r[1] for r in db.execute("PRAGMA table_info(courses)").fetchall()]
     if 'rating_adjustment' not in ccols:
         db.execute("ALTER TABLE courses ADD COLUMN rating_adjustment REAL DEFAULT 0")
     db.execute("UPDATE courses SET rating_adjustment = 0 WHERE rating_adjustment IS NULL")
-    # Set Destroyer Park Golf adjustment: +2.0 strokes → +20 rating points
-    db.execute("UPDATE courses SET rating_adjustment = 2.0 WHERE name = 'Destroyer Park Golf' AND rating_adjustment = 0")
+    # Reset any previously set adjustment — new formula derives scratch from player ratings
+    db.execute("UPDATE courses SET rating_adjustment = 0")
+
+    # Migrate: is_nr column on rounds (marks rounds that cannot be officially rated)
+    rcols = [r[1] for r in db.execute("PRAGMA table_info(rounds)").fetchall()]
+    if 'is_nr' not in rcols:
+        db.execute("ALTER TABLE rounds ADD COLUMN is_nr INTEGER DEFAULT 0")
+    db.execute("UPDATE rounds SET is_nr = 0 WHERE is_nr IS NULL")
 
     # Migrate: division column on players
     pcols = [r[1] for r in db.execute("PRAGMA table_info(players)").fetchall()]
@@ -440,6 +446,7 @@ def init_db():
     all_rounds = db.execute('''
         SELECT r.id AS round_id, r.rating, r.round_number, t.sort_date, r.player_id
         FROM rounds r JOIN tournaments t ON t.id = r.tournament_id
+        WHERE r.is_nr = 0 OR r.is_nr IS NULL
     ''').fetchall()
     pmap = {}
     for r in all_rounds:
@@ -465,19 +472,15 @@ def calculate_rating(course_rating, score):
 
 
 def recalculate_ratings(db):
-    """Recompute per-round ratings in strict chronological order.
+    """Recompute per-round ratings in strict chronological order, round-by-round.
 
-    Processes each tournament in date order, anchoring the SSA only on ratings
-    earned in *prior* tournaments. This prevents the feedback loop where
-    add/delete operations cause ratings to drift upward over time.
-
-    For each round:
-      1. Each previously-rated player implies a scratch: score + (rating - 1000) / 10
-      2. Average those implied scratches → the round's SSA
-      3. Rate everyone: rating = 1000 + (SSA - score) * 10
-      4. After each tournament, update the running player_ratings from all rounds so far
-
-    Falls back to round_avg - 7.5 when no players have prior ratings yet.
+    Rules:
+      - First round ever (player_ratings empty): eff_scratch = 54 (seeds the system)
+      - 3+ established players in a round: derive eff_scratch from their avg score/rating
+          eff_scratch = avg_score_of_rated_players + (avg_rating_of_rated_players - 1000) / 10
+      - Fewer than 3 established players (after first round): NR — is_nr = 1, no rating assigned
+      - After each rated round, immediately update player_ratings so subsequent rounds
+        (including later rounds in the same tournament) can use them.
     """
     # Update course_rating for display reference only (all-time avg - 15)
     for course in db.execute('SELECT id FROM courses').fetchall():
@@ -490,69 +493,71 @@ def recalculate_ratings(db):
             db.execute('UPDATE courses SET course_rating = ? WHERE id = ?',
                        (round(avg_all - 15, 1), cid))
 
-    # Load per-course rating adjustments (stroke offsets → rating points when × 10)
-    course_adjustments = {
-        r['id']: (r['rating_adjustment'] or 0)
-        for r in db.execute('SELECT id, rating_adjustment FROM courses').fetchall()
-    }
-    # Map each tournament to its course
-    tournament_course = {
-        r['id']: r['course_id']
-        for r in db.execute('SELECT id, course_id FROM tournaments').fetchall()
-    }
-
-    # Process tournaments in date order — build player ratings as we go
     tournaments = db.execute(
-        'SELECT id FROM tournaments ORDER BY sort_date, id'
+        'SELECT id, sort_date FROM tournaments ORDER BY sort_date, id'
     ).fetchall()
 
-    player_ratings = {}          # ratings known BEFORE the current tournament
-    processed_ids = []           # tournament ids completed so far
+    player_ratings = {}        # {player_id: current_rating} — updated after each rated round
+    player_round_history = {}  # {player_id: [round dicts]} — fed into compute_player_rating
+    first_round_ever = True
 
     for t in tournaments:
         tid = t['id']
-        course_id = tournament_course.get(tid)
-        adjustment = course_adjustments.get(course_id, 0)
+        sort_date = t['sort_date']
 
-        # Rate each round using only pre-tournament player ratings
-        for grp in db.execute('''
-            SELECT round_number, AVG(score) AS avg_round_score
-            FROM rounds WHERE tournament_id = ?
-            GROUP BY round_number
-        ''', (tid,)).fetchall():
-            round_rows = db.execute('''
-                SELECT id, score, player_id FROM rounds
-                WHERE tournament_id = ? AND round_number = ?
-            ''', (tid, grp['round_number'])).fetchall()
+        round_numbers = [r['round_number'] for r in db.execute(
+            'SELECT DISTINCT round_number FROM rounds WHERE tournament_id = ? ORDER BY round_number',
+            (tid,)
+        ).fetchall()]
 
-            implied = [
-                r['score'] + (player_ratings[r['player_id']] - 1000) / 10
-                for r in round_rows if r['player_id'] in player_ratings
-            ]
-            # Apply course adjustment: positive value raises eff_scratch → raises all ratings
-            eff_scratch = (sum(implied) / len(implied) if implied else grp['avg_round_score'] - 7.5) + adjustment
+        for round_number in round_numbers:
+            round_rows = db.execute(
+                'SELECT id, score, player_id FROM rounds '
+                'WHERE tournament_id = ? AND round_number = ?',
+                (tid, round_number)
+            ).fetchall()
 
-            for r in round_rows:
-                db.execute('UPDATE rounds SET rating = ? WHERE id = ?',
-                           (round(1000 + (eff_scratch - r['score']) * 10), r['id']))
+            # Players in this round who already have an established rating
+            rated_rows = [r for r in round_rows if r['player_id'] in player_ratings]
 
-        processed_ids.append(tid)
+            if first_round_ever:
+                # Seed: assume a score of 54 = 1000 for the very first round
+                eff_scratch = 54.0
+                first_round_ever = False
+                is_rated = True
+            elif len(rated_rows) >= 3:
+                avg_score  = sum(r['score'] for r in rated_rows) / len(rated_rows)
+                avg_rating = sum(player_ratings[r['player_id']] for r in rated_rows) / len(rated_rows)
+                eff_scratch = avg_score + (avg_rating - 1000) / 10
+                is_rated = True
+            else:
+                is_rated = False
 
-        # Update player ratings from all rounds in processed tournaments so far
-        player_ids = {r['player_id'] for r in db.execute(
-            'SELECT DISTINCT player_id FROM rounds WHERE tournament_id = ?', (tid,)
-        ).fetchall()}
+            if is_rated:
+                for r in round_rows:
+                    round_rating = round(1000 + (eff_scratch - r['score']) * 10)
+                    db.execute('UPDATE rounds SET rating = ?, is_nr = 0 WHERE id = ?',
+                               (round_rating, r['id']))
+                    pid = r['player_id']
+                    if pid not in player_round_history:
+                        player_round_history[pid] = []
+                    player_round_history[pid].append({
+                        'round_id':     r['id'],
+                        'rating':       round_rating,
+                        'sort_date':    sort_date,
+                        'round_number': round_number,
+                    })
 
-        placeholders = ','.join('?' * len(processed_ids))
-        for pid in player_ids:
-            rounds = db.execute(f'''
-                SELECT r.id AS round_id, r.rating, r.round_number, t2.sort_date
-                FROM rounds r JOIN tournaments t2 ON t2.id = r.tournament_id
-                WHERE r.player_id = ? AND t2.id IN ({placeholders})
-            ''', (pid, *processed_ids)).fetchall()
-            result = compute_player_rating([dict(r) for r in rounds])
-            if result['rating'] is not None:
-                player_ratings[pid] = result['rating']
+                # Update player_ratings immediately so the next round can use them
+                for r in round_rows:
+                    pid = r['player_id']
+                    if pid in player_round_history:
+                        result = compute_player_rating(player_round_history[pid])
+                        if result['rating'] is not None:
+                            player_ratings[pid] = result['rating']
+            else:
+                for r in round_rows:
+                    db.execute('UPDATE rounds SET is_nr = 1 WHERE id = ?', (r['id'],))
 
 
 def update_player_ratings(db):
@@ -581,12 +586,12 @@ def update_player_ratings(db):
 
 
 def fetch_rounds_for_rating(db, player_id=None):
-    """Fetch all rounds (or for one player) in the shape compute_player_rating expects."""
+    """Fetch all officially-rated rounds (is_nr = 0) in the shape compute_player_rating expects."""
     if player_id:
         rows = db.execute('''
             SELECT r.id AS round_id, r.rating, r.round_number, t.sort_date
             FROM rounds r JOIN tournaments t ON t.id = r.tournament_id
-            WHERE r.player_id = ?
+            WHERE r.player_id = ? AND (r.is_nr = 0 OR r.is_nr IS NULL)
         ''', (player_id,)).fetchall()
     else:
         rows = db.execute('''
@@ -595,6 +600,7 @@ def fetch_rounds_for_rating(db, player_id=None):
             FROM rounds r
             JOIN tournaments t ON t.id = r.tournament_id
             JOIN players p ON p.id = r.player_id
+            WHERE r.is_nr = 0 OR r.is_nr IS NULL
         ''').fetchall()
     return [dict(r) for r in rows]
 
@@ -726,7 +732,7 @@ def player(player_id):
     recent_ids = {r['round_id'] for r in filtered_sorted[:recent_count]}
 
     rounds = db.execute('''
-        SELECT r.id AS round_id, r.round_number, r.score, r.rating,
+        SELECT r.id AS round_id, r.round_number, r.score, r.rating, r.is_nr,
                t.id AS tournament_id, t.name AS tournament_name, t.date, t.sort_date,
                c.name AS course_name, c.course_rating
         FROM rounds r
@@ -736,28 +742,31 @@ def player(player_id):
         ORDER BY t.sort_date, r.round_number
     ''', (player_id,)).fetchall()
 
-    all_ratings = [r['rating'] for r in rounds]
+    rated_rounds = [r for r in rounds if not r['is_nr']]
+    all_ratings = [r['rating'] for r in rated_rounds]
     stats = {
         'rating': result['rating'],
         'num_rounds': result['rounds_used'],
-        'total_rounds': len(rounds),
+        'total_rounds': len(rated_rounds),
         'excluded': len(excluded_ids),
         'expired': len(expired_ids),
+        'nr_count': len(rounds) - len(rated_rounds),
         'best_rating': max(all_ratings) if all_ratings else None,
         'worst_rating': min(all_ratings) if all_ratings else None,
     }
 
-    # Rolling rating: what the player's official rating was after each round,
-    # computed by running compute_player_rating on all rounds up to that point.
+    # Rolling rating: what the player's official rating was after each rated round
     rounds_raw_sorted = sorted(rounds_raw, key=lambda r: (r.get('sort_date') or '', r['round_number']))
     rolling_map = {}
     for i in range(len(rounds_raw_sorted)):
         res_i = compute_player_rating(rounds_raw_sorted[:i + 1])
         rolling_map[rounds_raw_sorted[i]['round_id']] = res_i['rating']
 
-    # Build chart data (all rounds in chronological order)
+    # Build chart data — only include rated rounds in the chart
     chart_data = []
     for r in rounds:
+        if r['is_nr']:
+            continue  # NR rounds don't appear on the chart
         if r['round_id'] in excluded_ids:
             status = 'excluded'
         elif r['round_id'] in expired_ids:
@@ -817,7 +826,7 @@ def tournament(tournament_id):
 
     players_raw = db.execute('''
         SELECT p.id AS player_id, p.name,
-               r.round_number, r.score, r.rating
+               r.round_number, r.score, r.rating, r.is_nr
         FROM rounds r
         JOIN players p ON p.id = r.player_id
         WHERE r.tournament_id = ?
@@ -830,14 +839,15 @@ def tournament(tournament_id):
         if pid not in player_map:
             player_map[pid] = {'name': row['name'], 'player_id': pid, 'rounds': {}}
         player_map[pid]['rounds'][row['round_number']] = {
-            'score': row['score'], 'rating': row['rating']
+            'score': row['score'], 'rating': row['rating'], 'is_nr': bool(row['is_nr'])
         }
 
     results = []
     for pid, data in player_map.items():
         rounds = data['rounds']
         total_score = sum(r['score'] for r in rounds.values())
-        avg_rating = round(sum(r['rating'] for r in rounds.values()) / len(rounds))
+        rated_rounds = [r for r in rounds.values() if not r['is_nr']]
+        avg_rating = round(sum(r['rating'] for r in rated_rounds) / len(rated_rounds)) if rated_rounds else None
         results.append({
             'player_id': pid,
             'name': data['name'],
@@ -846,7 +856,7 @@ def tournament(tournament_id):
             'avg_rating': avg_rating,
             'num_rounds': len(rounds),
         })
-    results.sort(key=lambda x: x['avg_rating'], reverse=True)
+    results.sort(key=lambda x: (x['avg_rating'] is None, -(x['avg_rating'] or 0)))
 
     round_numbers = list(range(1, t['num_rounds'] + 1))
 
