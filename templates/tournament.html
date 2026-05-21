@@ -54,8 +54,12 @@
         <th class="text-center" data-sort>
           R{{ rn }}
           {% if rn in round_stats %}
-          <br><small class="fw-normal text-muted" title="Effective scratch for this round">
-            eff. {{ round_stats[rn].eff_scratch }} <span class="opacity-50">(avg {{ round_stats[rn].avg_score }})</span>
+          <br><small class="fw-normal text-muted" title="Effective scratch — what a 1000-rated player would shoot">
+            {% if round_stats[rn].eff_scratch is not none %}
+              eff. {{ round_stats[rn].eff_scratch }} <span class="opacity-50">(avg {{ round_stats[rn].avg_score }})</span>
+            {% else %}
+              <span class="badge bg-secondary">NR</span>
+            {% endif %}
           </small>
           {% endif %}
         </th>

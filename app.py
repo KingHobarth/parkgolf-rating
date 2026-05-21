@@ -521,8 +521,8 @@ def recalculate_ratings(db):
             rated_rows = [r for r in round_rows if r['player_id'] in player_ratings]
 
             if first_round_ever:
-                # Seed: assume a score of 54 = 1000 for the very first round
-                eff_scratch = 54.0
+                # Seed: assume a score of 56 = 1000 for the very first round
+                eff_scratch = 56.0
                 first_round_ever = False
                 is_rated = True
             elif len(rated_rows) >= 3:
@@ -860,18 +860,22 @@ def tournament(tournament_id):
 
     round_numbers = list(range(1, t['num_rounds'] + 1))
 
-    # Per-round stats for display: avg score and effective scratch
+    # Per-round stats for display: avg score and actual derived eff_scratch
+    # eff_scratch is back-calculated from stored ratings: score + (rating - 1000) / 10
     round_stats = {}
     for row in db.execute('''
-        SELECT round_number, AVG(score) AS avg_score
+        SELECT round_number,
+               AVG(score) AS avg_score,
+               AVG(CASE WHEN is_nr = 0 THEN score + (rating - 1000.0) / 10 END) AS eff_scratch,
+               SUM(CASE WHEN is_nr = 0 THEN 1 ELSE 0 END) AS rated_count
         FROM rounds WHERE tournament_id = ?
         GROUP BY round_number
     ''', (tournament_id,)).fetchall():
-        avg = row['avg_score']
-        eff = avg - 7.5  # full field normalization: avg player = 925
+        eff = row['eff_scratch']
         round_stats[row['round_number']] = {
-            'avg_score': round(avg, 1),
-            'eff_scratch': round(eff, 1),
+            'avg_score':  round(row['avg_score'], 1),
+            'eff_scratch': round(eff, 1) if eff is not None else None,
+            'is_nr': row['rated_count'] == 0,
         }
 
     return render_template('tournament.html', t=t, results=results,
