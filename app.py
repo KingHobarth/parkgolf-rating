@@ -548,12 +548,12 @@ def recalculate_ratings(db):
     # Elite players seeded at 1000; mid-tier players seeded at 900.
     # These seeds are replaced by real computed ratings after their first round.
     seeds = {
-        'Hobart Shaw': 1000.0,
-        'Brandon Nihiser': 1000.0,
-        'Taylor Junge': 1000.0,
-        'Christine Shaw': 900.0,
-        'Erin Spires': 900.0,
-        'Frank Todaro': 900.0,
+        'Hobart Shaw': 1030.0,
+        'Brandon Nihiser': 1030.0,
+        'Taylor Junge': 1030.0,
+        'Christine Shaw': 930.0,
+        'Erin Spires': 930.0,
+        'Frank Todaro': 930.0,
     }
     seed_rows = db.execute(
         'SELECT id, name FROM players WHERE name IN ({})'.format(
