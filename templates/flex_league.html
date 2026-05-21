@@ -43,9 +43,19 @@
               {% if w.points is none %}
                 <td class="text-center text-muted">—</td>
               {% elif w.counted %}
-                <td class="text-center fw-semibold text-success">{{ w.points }}</td>
+                <td class="text-center fw-semibold text-success">
+                  {{ w.points }}
+                  {% if w.place is not none %}
+                  <br><small class="text-muted fw-normal">{{ w.place }}{{ 'st' if w.place == 1 else 'nd' if w.place == 2 else 'rd' if w.place == 3 else 'th' }} &middot; {{ w.score }}</small>
+                  {% endif %}
+                </td>
               {% else %}
-                <td class="text-center text-muted" style="text-decoration:line-through" title="Not counted (outside top 8)">{{ w.points }}</td>
+                <td class="text-center text-muted" style="text-decoration:line-through" title="Not counted (outside top 8)">
+                  {{ w.points }}
+                  {% if w.place is not none %}
+                  <br><small class="fw-normal" style="text-decoration:none">{{ w.place }}{{ 'st' if w.place == 1 else 'nd' if w.place == 2 else 'rd' if w.place == 3 else 'th' }} &middot; {{ w.score }}</small>
+                  {% endif %}
+                </td>
               {% endif %}
             {% endfor %}
           </tr>

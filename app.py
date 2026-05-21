@@ -190,8 +190,10 @@ def compute_flex_standings(db):
     if not tournaments:
         return {'tournaments': [], 'Men': [], 'Women': []}
 
-    # For each tournament compute per-division points
+    # For each tournament compute per-division points, places, and scores
     tour_points = {}   # {tournament_id: {player_id: points}}
+    tour_scores = {}   # {tournament_id: {player_id: total_score}}
+    tour_places = {}   # {tournament_id: {player_id: finishing place in division}}
     for t in tournaments:
         rows = db.execute('''
             SELECT r.player_id, p.division, SUM(r.score) AS total_score
@@ -202,14 +204,30 @@ def compute_flex_standings(db):
         ''', (t['id'],)).fetchall()
 
         by_div = {'Men': [], 'Women': []}
+        scores_map = {}
         for row in rows:
             div = row['division'] if row['division'] in by_div else 'Men'
             by_div[div].append((row['player_id'], row['total_score']))
+            scores_map[row['player_id']] = row['total_score']
+
+        tour_scores[t['id']] = scores_map
 
         pts = {}
+        places = {}
         for div_players in by_div.values():
             pts.update(assign_league_points(div_players, flex_points_for_position))
+            # Assign finishing places (ties share lowest place number)
+            sorted_div = sorted(div_players, key=lambda x: x[1])
+            i = 0
+            while i < len(sorted_div):
+                j = i
+                while j < len(sorted_div) and sorted_div[j][1] == sorted_div[i][1]:
+                    j += 1
+                for k in range(i, j):
+                    places[sorted_div[k][0]] = i + 1
+                i = j
         tour_points[t['id']] = pts
+        tour_places[t['id']] = places
 
     # Collect all player ids that appear in any flex tournament
     all_pids = set(pid for pts in tour_points.values() for pid in pts)
@@ -240,7 +258,12 @@ def compute_flex_standings(db):
         total = sum(p for tid, p in sorted_earned[:8])
 
         weekly = {
-            tid: {'points': p, 'counted': (p is not None and tid in counted_ids)}
+            tid: {
+                'points': p,
+                'counted': (p is not None and tid in counted_ids),
+                'place': tour_places.get(tid, {}).get(pid),
+                'score': tour_scores.get(tid, {}).get(pid),
+            }
             for tid, p in weekly_pts
         }
 
@@ -276,6 +299,8 @@ def compute_travelers_standings(db):
         return {'tournaments': [], 'Men': [], 'Women': []}
 
     tour_points = {}
+    tour_scores = {}
+    tour_places = {}
     for t in tournaments:
         rows = db.execute('''
             SELECT r.player_id, p.division, SUM(r.score) AS total_score
@@ -286,14 +311,29 @@ def compute_travelers_standings(db):
         ''', (t['id'],)).fetchall()
 
         by_div = {'Men': [], 'Women': []}
+        scores_map = {}
         for row in rows:
             div = row['division'] if row['division'] in by_div else 'Men'
             by_div[div].append((row['player_id'], row['total_score']))
+            scores_map[row['player_id']] = row['total_score']
+
+        tour_scores[t['id']] = scores_map
 
         pts = {}
+        places = {}
         for div_players in by_div.values():
             pts.update(assign_league_points(div_players, travelers_points_for_position))
+            sorted_div = sorted(div_players, key=lambda x: x[1])
+            i = 0
+            while i < len(sorted_div):
+                j = i
+                while j < len(sorted_div) and sorted_div[j][1] == sorted_div[i][1]:
+                    j += 1
+                for k in range(i, j):
+                    places[sorted_div[k][0]] = i + 1
+                i = j
         tour_points[t['id']] = pts
+        tour_places[t['id']] = places
 
     all_pids = set(pid for pts in tour_points.values() for pid in pts)
     if not all_pids:
@@ -321,7 +361,12 @@ def compute_travelers_standings(db):
         total = sum(p for tid, p in sorted_earned[:3])
 
         weekly = {
-            tid: {'points': p, 'counted': (p is not None and tid in counted_ids)}
+            tid: {
+                'points': p,
+                'counted': (p is not None and tid in counted_ids),
+                'place': tour_places.get(tid, {}).get(pid),
+                'score': tour_scores.get(tid, {}).get(pid),
+            }
             for tid, p in weekly_pts
         }
 
