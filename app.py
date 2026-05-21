@@ -590,6 +590,10 @@ def recalculate_ratings(db):
 
                 # Dynamic slope: split rated players into top/bottom halves by rating.
                 # Need ≥5 rated players; otherwise fall back to fixed slope of 10.
+                # Slope is clamped to [6, 15] to prevent runaway feedback — as player
+                # ratings naturally diverge over time the raw rating spread grows faster
+                # than the score spread, which would cause the slope (and all ratings)
+                # to inflate without bound.
                 if len(rated_rows) >= 5:
                     sorted_rated = sorted(rated_rows, key=lambda r: player_ratings[r['player_id']], reverse=True)
                     n = len(sorted_rated)
@@ -605,7 +609,8 @@ def recalculate_ratings(db):
 
                     score_spread = avg_score_bottom - avg_score_top
                     if score_spread > 0:
-                        slope = (avg_rating_top - avg_rating_bottom) / score_spread
+                        raw_slope = (avg_rating_top - avg_rating_bottom) / score_spread
+                        slope = max(6.0, min(15.0, raw_slope))
                     else:
                         slope = 10.0  # guard against zero spread
                 else:
