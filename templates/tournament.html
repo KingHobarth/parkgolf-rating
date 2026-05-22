@@ -207,6 +207,8 @@
             <tr>
               <th style="min-width:52px">Hole</th>
               <th class="text-center" style="min-width:40px">Par</th>
+              <th class="text-center text-muted" style="min-width:52px">Avg</th>
+              <th style="min-width:140px">Distribution</th>
               {% for r in results %}
                 {% if rn in r.rounds %}
                 <th class="text-center" style="min-width:60px">
@@ -214,8 +216,6 @@
                 </th>
                 {% endif %}
               {% endfor %}
-              <th class="text-center text-muted" style="min-width:52px">Avg</th>
-              <th style="min-width:140px">Distribution</th>
             </tr>
           </thead>
           <tbody>
@@ -224,6 +224,8 @@
             <tr>
               <td class="fw-semibold">{{ h.hole_label }}</td>
               <td class="text-center text-muted">{{ h.par or '—' }}</td>
+              <td class="text-center text-muted small">{{ hs.avg or '—' }}</td>
+              <td>{{ dist_bar(hs.dist) }}</td>
               {% for r in results %}
                 {% if rn in r.rounds %}
                   {% set cell = hole_scores_by_round.get(rn, {}).get(r.player_id, {}).get(h.hole_label) %}
@@ -254,8 +256,6 @@
                   {% endif %}
                 {% endif %}
               {% endfor %}
-              <td class="text-center text-muted small">{{ hs.avg or '—' }}</td>
-              <td>{{ dist_bar(hs.dist) }}</td>
             </tr>
             {% endfor %}
           </tbody>
@@ -265,6 +265,7 @@
               <td class="text-center">
                 {{ course_holes | selectattr('par') | map(attribute='par') | sum or '—' }}
               </td>
+              <td colspan="2"></td>
               {% for r in results %}
                 {% if rn in r.rounds %}
                   {% set player_hs = hole_scores_by_round.get(rn, {}).get(r.player_id, {}) %}
@@ -274,7 +275,6 @@
                   </td>
                 {% endif %}
               {% endfor %}
-              <td colspan="2"></td>
             </tr>
           </tfoot>
         </table>
