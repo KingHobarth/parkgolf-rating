@@ -1,0 +1,207 @@
+{% extends 'base.html' %}
+{% block title %}{{ c.name }} — Park Golf Ratings{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{{ url_for('courses') }}">Courses</a></li>
+    <li class="breadcrumb-item active">{{ c.name }}</li>
+  </ol>
+</nav>
+
+{# ── Header ─────────────────────────────────────────────────────────────────── #}
+<div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+  <div>
+    <h2 class="mb-0">{{ c.name }}</h2>
+    {% if c.location %}
+      <p class="text-muted mb-0">{{ c.location }}</p>
+    {% endif %}
+  </div>
+  {% if session.get('admin') %}
+  <a href="{{ url_for('edit_course', course_id=c.id) }}" class="btn btn-sm btn-outline-secondary">
+    ✏️ Edit Course / Holes
+  </a>
+  {% endif %}
+</div>
+
+{# ── Stat cards ─────────────────────────────────────────────────────────────── #}
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="card text-center border-success">
+      <div class="card-body py-3">
+        <div class="fs-2 fw-bold text-success">{{ overall.record_score or '—' }}</div>
+        <div class="text-muted small">Course Record</div>
+        {% if record_row %}
+          <div class="text-muted" style="font-size:.75rem">
+            {{ record_row.name }}<br>{{ record_row.date }}
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center">
+      <div class="card-body py-3">
+        <div class="fs-2 fw-bold">{{ overall.avg_score | round(1) if overall.avg_score else '—' }}</div>
+        <div class="text-muted small">Avg Score</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center">
+      <div class="card-body py-3">
+        <div class="fs-2 fw-bold">{{ overall.num_rounds }}</div>
+        <div class="text-muted small">Rounds Played</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center">
+      <div class="card-body py-3">
+        <div class="fs-2 fw-bold text-primary">
+          {% if total_par %}{{ total_par }}{% if holes | length %}
+            <span class="fs-6 text-muted fw-normal">/ {{ holes | length }} holes</span>
+          {% endif %}{% else %}—{% endif %}
+        </div>
+        <div class="text-muted small">Total Par{% if total_yards %} &nbsp;·&nbsp; {{ total_yards }} yds{% endif %}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ── Hole-by-hole table ─────────────────────────────────────────────────────── #}
+{% if holes %}
+<h5 class="mt-2">Hole Details</h5>
+<div class="table-responsive mb-4">
+  <table class="table table-sm table-hover">
+    <thead class="table-light">
+      <tr>
+        <th class="text-center">Hole</th>
+        <th class="text-center">Par</th>
+        <th class="text-center">Yards</th>
+        <th class="text-center">Avg Score</th>
+        <th class="text-center">vs Par</th>
+        <th class="text-center">Best Score</th>
+        <th class="text-center text-muted small">Scored Rounds</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% set ns = namespace(total_avg=0, avg_holes=0) %}
+      {% for h in holes %}
+        {% set hs = hole_stats.get(h.hole_label, {}) %}
+        {% set vs_par = (hs.avg - h.par) | round(2) if (hs.avg and h.par) else None %}
+        <tr>
+          <td class="text-center fw-semibold">{{ h.hole_label }}</td>
+          <td class="text-center">{{ h.par or '—' }}</td>
+          <td class="text-center">{{ h.yards or '—' }}</td>
+          <td class="text-center">{{ hs.avg or '—' }}</td>
+          <td class="text-center">
+            {% if vs_par is not none %}
+              <span class="badge {% if vs_par < 0 %}bg-success{% elif vs_par == 0 %}bg-secondary{% else %}bg-danger{% endif %}">
+                {% if vs_par > 0 %}+{% endif %}{{ vs_par }}
+              </span>
+            {% else %}—{% endif %}
+          </td>
+          <td class="text-center fw-semibold {% if hs.best and h.par and hs.best < h.par %}text-success{% endif %}">
+            {{ hs.best or '—' }}
+          </td>
+          <td class="text-center text-muted small">{{ hs.cnt or '—' }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+    {% if total_par %}
+    <tfoot class="table-light fw-semibold">
+      <tr>
+        <td class="text-center">Total</td>
+        <td class="text-center">{{ total_par }}</td>
+        <td class="text-center">{{ total_yards or '—' }}</td>
+        <td colspan="4"></td>
+      </tr>
+    </tfoot>
+    {% endif %}
+  </table>
+</div>
+{% else %}
+<div class="alert alert-secondary mb-4">
+  No hole configuration yet.
+  {% if session.get('admin') %}
+    <a href="{{ url_for('edit_course', course_id=c.id) }}">Configure holes →</a>
+  {% endif %}
+</div>
+{% endif %}
+
+{# ── Top rated rounds ───────────────────────────────────────────────────────── #}
+{% if top_rounds %}
+<h5>Top Rated Rounds</h5>
+<div class="table-responsive mb-4">
+  <table class="table table-sm table-hover">
+    <thead class="table-light">
+      <tr>
+        <th>Player</th>
+        <th>Tournament</th>
+        <th class="text-center">Rnd</th>
+        <th class="text-center">Score</th>
+        <th class="text-center">Rating</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in top_rounds %}
+      <tr>
+        <td>{{ r.player_name }}</td>
+        <td>
+          <a href="{{ url_for('tournament', tournament_id=r.tournament_id) }}" class="text-decoration-none text-muted small">
+            {{ r.tournament_name }} · {{ r.date }}
+          </a>
+        </td>
+        <td class="text-center">R{{ r.round_number }}</td>
+        <td class="text-center">{{ r.score }}</td>
+        <td class="text-center">
+          <span class="badge {% if r.rating >= 1000 %}bg-success{% elif r.rating >= 950 %}bg-primary{% else %}bg-secondary{% endif %}">
+            {{ r.rating }}
+          </span>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{# ── Events at this course ──────────────────────────────────────────────────── #}
+{% if tournaments %}
+<h5>Events at This Course</h5>
+<div class="table-responsive">
+  <table class="table table-sm table-hover">
+    <thead class="table-light">
+      <tr>
+        <th>Event</th>
+        <th>Date</th>
+        <th>League</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for t in tournaments %}
+      <tr>
+        <td>
+          <a href="{{ url_for('tournament', tournament_id=t.id) }}" class="text-decoration-none">
+            {{ t.name }}
+          </a>
+        </td>
+        <td class="text-muted small">{{ t.date }}</td>
+        <td>
+          {% if t.league %}
+            <span class="badge rounded-pill
+              {% if t.league == 'Flex League' %}bg-primary
+              {% elif t.league == "IPGAA Traveler's League" %}bg-danger
+              {% else %}bg-secondary{% endif %}">
+              {{ t.league }}
+            </span>
+          {% else %}—{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

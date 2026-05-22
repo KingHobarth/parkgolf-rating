@@ -1,0 +1,140 @@
+{% extends 'base.html' %}
+{% block title %}Hole Scores — {{ t.name }}{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{{ url_for('events') }}">Events</a></li>
+    <li class="breadcrumb-item">
+      <a href="{{ url_for('tournament', tournament_id=t.id) }}">{{ t.name }}</a>
+    </li>
+    <li class="breadcrumb-item active">Hole Scores</li>
+  </ol>
+</nav>
+
+<h2 class="mb-1">Hole Scores — {{ t.name }}</h2>
+<p class="text-muted mb-4">{{ t.course_name }} &middot; {{ t.date }}</p>
+
+{% if not holes %}
+  <div class="alert alert-warning">
+    No holes have been configured for <strong>{{ t.course_name }}</strong> yet.
+    <a href="{{ url_for('edit_course', course_id=t.course_id) }}">Configure holes →</a>
+  </div>
+
+{% elif not rounds_by_num %}
+  <div class="alert alert-info">No players/rounds found for this event.</div>
+
+{% else %}
+<p class="text-muted small mb-3">
+  Enter the score for each hole. Leaving a cell blank means no score recorded for that hole.
+  Hole totals are shown live — they don't have to match the round total if you're entering partial data.
+</p>
+
+<form method="post">
+
+  {# ── Tab headers (only shown for multi-round events) ─────────────────────── #}
+  {% set round_nums = rounds_by_num.keys() | list | sort %}
+  {% if round_nums | length > 1 %}
+  <ul class="nav nav-tabs mb-3" id="roundTabs">
+    {% for rn in round_nums %}
+    <li class="nav-item">
+      <button class="nav-link {% if loop.first %}active{% endif %}"
+              type="button" data-bs-toggle="tab"
+              data-bs-target="#round{{ rn }}">Round {{ rn }}</button>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  <div class="tab-content">
+  {% for rn in round_nums %}
+    {% set players = rounds_by_num[rn] %}
+    <div class="tab-pane fade {% if loop.first %}show active{% endif %}" id="round{{ rn }}">
+
+      <div class="table-responsive">
+        <table class="table table-sm table-bordered align-middle hole-score-table" data-round="{{ rn }}">
+          <thead class="table-light">
+            <tr>
+              <th style="min-width:60px">Hole</th>
+              <th class="text-center" style="min-width:50px">Par</th>
+              {% for p in players %}
+              <th class="text-center" style="min-width:75px">
+                {{ p.player_name.split()[0] }}<br>
+                <small class="text-muted fw-normal">total: {{ p.total_score }}</small>
+              </th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for h in holes %}
+            <tr>
+              <td class="fw-semibold">{{ h.hole_label }}</td>
+              <td class="text-center text-muted">{{ h.par or '—' }}</td>
+              {% for p in players %}
+              <td class="text-center p-1">
+                <input type="number"
+                       class="form-control form-control-sm text-center hole-input"
+                       name="hs_{{ p.round_id }}_{{ h.hole_label }}"
+                       data-player="{{ p.round_id }}"
+                       value="{{ existing_hs.get(p.round_id, {}).get(h.hole_label, '') }}"
+                       min="1" max="20" placeholder="—"
+                       style="width:58px; margin:0 auto;">
+              </td>
+              {% endfor %}
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot class="table-light fw-semibold">
+            <tr>
+              <td colspan="2">Hole Total</td>
+              {% for p in players %}
+              <td class="text-center" id="sum_{{ p.round_id }}">—</td>
+              {% endfor %}
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+    </div>
+  {% endfor %}
+  </div>
+
+  <div class="mt-3">
+    <button type="submit" class="btn btn-success">Save Hole Scores</button>
+    <a href="{{ url_for('tournament', tournament_id=t.id) }}" class="btn btn-outline-secondary ms-2">Cancel</a>
+  </div>
+</form>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  function updateSums() {
+    // For each player column, sum all entered hole scores
+    document.querySelectorAll('.hole-input').forEach(function (input) {
+      // We'll compute per-player after collecting all
+    });
+
+    const playerTotals = {};
+    document.querySelectorAll('.hole-input').forEach(function (el) {
+      const pid = el.dataset.player;
+      const v   = parseInt(el.value);
+      if (!playerTotals[pid]) playerTotals[pid] = 0;
+      if (!isNaN(v)) playerTotals[pid] += v;
+    });
+
+    Object.entries(playerTotals).forEach(function ([pid, total]) {
+      const cell = document.getElementById('sum_' + pid);
+      if (cell) cell.textContent = total || '—';
+    });
+  }
+
+  document.querySelectorAll('.hole-input').forEach(function (el) {
+    el.addEventListener('input', updateSums);
+  });
+
+  updateSums();
+})();
+</script>
+{% endblock %}

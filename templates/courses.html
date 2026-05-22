@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+{% block title %}Courses — Park Golf Ratings{% endblock %}
+
+{% block content %}
+<h2 class="mb-1">Courses</h2>
+<p class="text-muted mb-4">Every course in the Park Golf Ratings system — click a course for full stats and hole details.</p>
+
+{% if not courses %}
+  <div class="alert alert-info">No courses have been added yet.</div>
+{% else %}
+<div class="table-responsive">
+  <table class="table table-hover align-middle" data-sortable>
+    <thead class="table-success">
+      <tr>
+        <th data-sort>Course</th>
+        <th data-sort>Location</th>
+        <th class="text-center" data-sort>Holes</th>
+        <th class="text-center" data-sort>Par</th>
+        <th class="text-center" data-sort>Yards</th>
+        <th class="text-center" data-sort>Rounds</th>
+        <th class="text-center" data-sort>Record</th>
+        <th class="text-center" data-sort>Avg Score</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in courses %}
+      <tr>
+        <td>
+          <a href="{{ url_for('course', course_id=c.id) }}" class="text-decoration-none fw-semibold">
+            {{ c.name }}
+          </a>
+        </td>
+        <td class="text-muted small">{{ c.location or '—' }}</td>
+        <td class="text-center">{{ c.num_holes if c.num_holes else '—' }}</td>
+        <td class="text-center">{{ c.total_par or '—' }}</td>
+        <td class="text-center">{{ c.total_yards or '—' }}</td>
+        <td class="text-center" data-val="{{ c.num_rounds }}">{{ c.num_rounds }}</td>
+        <td class="text-center fw-semibold text-success" data-val="{{ c.course_record or '' }}">
+          {{ c.course_record or '—' }}
+        </td>
+        <td class="text-center" data-val="{{ c.avg_score or '' }}">
+          {{ c.avg_score or '—' }}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

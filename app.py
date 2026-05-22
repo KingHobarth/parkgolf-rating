@@ -518,6 +518,30 @@ def calculate_rating(course_rating, score):
     return round(1000 + (course_rating - score) * 10)
 
 
+def generate_hole_labels(num_holes, scheme):
+    """Return list of (hole_label, sort_order) for a given hole config."""
+    if scheme == '1-9':
+        return [(str(i), i) for i in range(1, 10)]
+    if scheme == '1-18':
+        return [(str(i), i) for i in range(1, 19)]
+    if scheme == 'A1-A9':
+        return [(f'A{i}', i) for i in range(1, 10)]
+    if scheme == 'A1-B9':
+        return [(f'A{i}', i) for i in range(1, 10)] + [(f'B{i}', i + 9) for i in range(1, 10)]
+    return []
+
+
+def delete_rounds_for_tournament(db, tournament_id):
+    """Delete all rounds (and their hole scores) for a tournament."""
+    round_ids = [r['id'] for r in db.execute(
+        'SELECT id FROM rounds WHERE tournament_id = ?', (tournament_id,)
+    ).fetchall()]
+    if round_ids:
+        db.execute('DELETE FROM hole_scores WHERE round_id IN ({})'.format(
+            ','.join('?' * len(round_ids))), round_ids)
+    db.execute('DELETE FROM rounds WHERE tournament_id = ?', (tournament_id,))
+
+
 def recalculate_ratings(db):
     """Recompute per-round ratings in strict chronological order, round-by-round.
 
@@ -1226,8 +1250,8 @@ def edit_tournament(tournament_id):
             (name, course_id, display_date, sort_date, num_rounds, league, tournament_id)
         )
 
-        # Delete existing rounds for this tournament, then re-insert from form
-        db.execute('DELETE FROM rounds WHERE tournament_id = ?', (tournament_id,))
+        # Delete existing rounds (and hole scores) for this tournament, then re-insert from form
+        delete_rounds_for_tournament(db, tournament_id)
 
         course = db.execute('SELECT * FROM courses WHERE id = ?', (course_id,)).fetchone()
         player_names = request.form.getlist('player_name')
@@ -1315,7 +1339,7 @@ def delete_tournament(tournament_id):
         return redirect(url_for('events'))
 
     if request.method == 'POST':
-        db.execute('DELETE FROM rounds WHERE tournament_id = ?', (tournament_id,))
+        delete_rounds_for_tournament(db, tournament_id)
         db.execute('DELETE FROM tournaments WHERE id = ?', (tournament_id,))
         db.execute("UPDATE players SET previous_rating = current_rating")
         db.commit()
@@ -1361,6 +1385,236 @@ def calculator():
     db = get_db()
     courses = db.execute('SELECT * FROM courses ORDER BY name').fetchall()
     return render_template('calculator.html', courses=courses)
+
+
+# ── Courses ────────────────────────────────────────────────────────────────────
+
+@app.route('/courses')
+def courses():
+    db = get_db()
+    courses_raw = db.execute('SELECT * FROM courses ORDER BY name').fetchall()
+    course_list = []
+    for c in courses_raw:
+        stats = db.execute('''
+            SELECT COUNT(r.id) AS num_rounds,
+                   MIN(r.score)  AS course_record,
+                   AVG(r.score)  AS avg_score
+            FROM rounds r
+            JOIN tournaments t ON t.id = r.tournament_id
+            WHERE t.course_id = ?
+        ''', (c['id'],)).fetchone()
+        holes = db.execute(
+            'SELECT par, yards FROM course_holes WHERE course_id = ? ORDER BY sort_order',
+            (c['id'],)
+        ).fetchall()
+        total_par   = sum(h['par']   for h in holes if h['par'])   or None
+        total_yards = sum(h['yards'] for h in holes if h['yards']) or None
+        course_list.append({
+            'id': c['id'], 'name': c['name'], 'location': c['location'],
+            'num_rounds':    stats['num_rounds'] or 0,
+            'course_record': stats['course_record'],
+            'avg_score':     round(stats['avg_score'], 1) if stats['avg_score'] else None,
+            'total_par':     total_par,
+            'total_yards':   total_yards,
+            'num_holes':     len(holes),
+        })
+    return render_template('courses.html', courses=course_list)
+
+
+@app.route('/courses/<int:course_id>')
+def course(course_id):
+    db = get_db()
+    c = db.execute('SELECT * FROM courses WHERE id = ?', (course_id,)).fetchone()
+    if not c:
+        return redirect(url_for('courses'))
+
+    holes = db.execute(
+        'SELECT * FROM course_holes WHERE course_id = ? ORDER BY sort_order',
+        (course_id,)
+    ).fetchall()
+
+    overall = db.execute('''
+        SELECT COUNT(r.id) AS num_rounds,
+               MIN(r.score)  AS record_score,
+               AVG(r.score)  AS avg_score,
+               MAX(r.rating) AS best_rating
+        FROM rounds r JOIN tournaments t ON t.id = r.tournament_id
+        WHERE t.course_id = ?
+    ''', (course_id,)).fetchone()
+
+    record_row = None
+    if overall['record_score']:
+        record_row = db.execute('''
+            SELECT p.name, r.score, r.rating, r.round_number,
+                   t.name AS tournament_name, t.date
+            FROM rounds r
+            JOIN players p ON p.id = r.player_id
+            JOIN tournaments t ON t.id = r.tournament_id
+            WHERE t.course_id = ? AND r.score = ?
+            ORDER BY t.sort_date ASC LIMIT 1
+        ''', (course_id, overall['record_score'])).fetchone()
+
+    # Top 5 rated rounds ever at this course
+    top_rounds = db.execute('''
+        SELECT p.name AS player_name, r.score, r.rating, r.round_number,
+               t.name AS tournament_name, t.date, t.id AS tournament_id
+        FROM rounds r
+        JOIN players p ON p.id = r.player_id
+        JOIN tournaments t ON t.id = r.tournament_id
+        WHERE t.course_id = ? AND r.is_nr = 0
+        ORDER BY r.rating DESC LIMIT 5
+    ''', (course_id,)).fetchall()
+
+    tournaments = db.execute('''
+        SELECT id, name, date, sort_date, league
+        FROM tournaments WHERE course_id = ? ORDER BY sort_date DESC
+    ''', (course_id,)).fetchall()
+
+    # Hole-by-hole stats (aggregated across all rounds with hole scores at this course)
+    hole_stats = {}
+    for h in holes:
+        row = db.execute('''
+            SELECT COUNT(hs.score) AS cnt,
+                   AVG(hs.score)   AS avg,
+                   MIN(hs.score)   AS best
+            FROM hole_scores hs
+            JOIN rounds r ON r.id = hs.round_id
+            JOIN tournaments t ON t.id = r.tournament_id
+            WHERE t.course_id = ? AND hs.hole_label = ?
+        ''', (course_id, h['hole_label'])).fetchone()
+        hole_stats[h['hole_label']] = {
+            'cnt':  row['cnt'] or 0,
+            'avg':  round(row['avg'], 2) if row['avg'] else None,
+            'best': row['best'],
+        }
+
+    total_par   = sum(h['par']   for h in holes if h['par'])   or None
+    total_yards = sum(h['yards'] for h in holes if h['yards']) or None
+
+    return render_template('course.html',
+        c=c, holes=holes, hole_stats=hole_stats,
+        overall=overall, record_row=record_row, top_rounds=top_rounds,
+        tournaments=tournaments, total_par=total_par, total_yards=total_yards)
+
+
+@app.route('/courses/<int:course_id>/edit', methods=['GET', 'POST'])
+@admin_required
+def edit_course(course_id):
+    db = get_db()
+    c = db.execute('SELECT * FROM courses WHERE id = ?', (course_id,)).fetchone()
+    if not c:
+        return redirect(url_for('courses'))
+
+    if request.method == 'POST':
+        action = request.form.get('action', 'save_holes')
+
+        if action == 'configure':
+            num_holes = int(request.form.get('num_holes', 18))
+            scheme    = request.form.get('scheme', '1-18')
+            db.execute('DELETE FROM course_holes WHERE course_id = ?', (course_id,))
+            for label, sort_order in generate_hole_labels(num_holes, scheme):
+                db.execute(
+                    'INSERT INTO course_holes (course_id, hole_label, sort_order) VALUES (?, ?, ?)',
+                    (course_id, label, sort_order)
+                )
+            db.commit()
+            flash(f'Configured {num_holes} holes ({scheme}).', 'success')
+
+        elif action == 'save_holes':
+            for h in db.execute(
+                'SELECT * FROM course_holes WHERE course_id = ? ORDER BY sort_order',
+                (course_id,)
+            ).fetchall():
+                par_str   = request.form.get(f'par_{h["hole_label"]}',   '').strip()
+                yards_str = request.form.get(f'yards_{h["hole_label"]}', '').strip()
+                par   = int(par_str)   if par_str.isdigit()   else None
+                yards = int(yards_str) if yards_str.isdigit() else None
+                db.execute('UPDATE course_holes SET par = ?, yards = ? WHERE id = ?',
+                           (par, yards, h['id']))
+            db.commit()
+            flash('Hole details saved.', 'success')
+
+        return redirect(url_for('edit_course', course_id=course_id))
+
+    holes = db.execute(
+        'SELECT * FROM course_holes WHERE course_id = ? ORDER BY sort_order',
+        (course_id,)
+    ).fetchall()
+
+    num_holes = len(holes)
+    if holes:
+        first = holes[0]['hole_label']
+        if first.startswith('A'):
+            scheme = 'A1-A9' if num_holes == 9 else 'A1-B9'
+        else:
+            scheme = '1-9' if num_holes == 9 else '1-18'
+    else:
+        num_holes, scheme = 18, '1-18'
+
+    return render_template('edit_course.html',
+        c=c, holes=holes, num_holes=num_holes, scheme=scheme)
+
+
+@app.route('/tournament/<int:tournament_id>/hole-scores', methods=['GET', 'POST'])
+@admin_required
+def edit_hole_scores(tournament_id):
+    db = get_db()
+    t = db.execute('''
+        SELECT t.*, c.name AS course_name, c.id AS course_id
+        FROM tournaments t JOIN courses c ON c.id = t.course_id
+        WHERE t.id = ?
+    ''', (tournament_id,)).fetchone()
+    if not t:
+        return redirect(url_for('events'))
+
+    holes = db.execute(
+        'SELECT * FROM course_holes WHERE course_id = ? ORDER BY sort_order',
+        (t['course_id'],)
+    ).fetchall()
+
+    rounds_raw = db.execute('''
+        SELECT r.id AS round_id, r.round_number, r.score AS total_score,
+               p.id AS player_id, p.name AS player_name
+        FROM rounds r JOIN players p ON p.id = r.player_id
+        WHERE r.tournament_id = ?
+        ORDER BY r.round_number, p.name
+    ''', (tournament_id,)).fetchall()
+
+    rounds_by_num = {}
+    for r in rounds_raw:
+        rounds_by_num.setdefault(r['round_number'], []).append(r)
+
+    # Existing hole scores keyed by {round_id: {hole_label: score}}
+    existing_hs = {}
+    if rounds_raw:
+        rids = [r['round_id'] for r in rounds_raw]
+        for hs in db.execute(
+            'SELECT round_id, hole_label, score FROM hole_scores WHERE round_id IN ({})'.format(
+                ','.join('?' * len(rids))), rids
+        ).fetchall():
+            existing_hs.setdefault(hs['round_id'], {})[hs['hole_label']] = hs['score']
+
+    if request.method == 'POST':
+        if rounds_raw:
+            rids = [r['round_id'] for r in rounds_raw]
+            db.execute('DELETE FROM hole_scores WHERE round_id IN ({})'.format(
+                ','.join('?' * len(rids))), rids)
+        inserted = 0
+        for r in rounds_raw:
+            for h in holes:
+                val = request.form.get(f'hs_{r["round_id"]}_{h["hole_label"]}', '').strip()
+                if val and val.isdigit():
+                    db.execute(
+                        'INSERT OR REPLACE INTO hole_scores (round_id, hole_label, score) VALUES (?, ?, ?)',
+                        (r['round_id'], h['hole_label'], int(val))
+                    )
+                    inserted += 1
+        db.commit()
+        flash(f'Hole scores saved ({inserted} entries).', 'success')
+        return redirect(url_for('edit_hole_scores', tournament_id=tournament_id))
+
+    return render_template('edit_hole_scores.html',
+        t=t, holes=holes, rounds_by_num=rounds_by_num, existing_hs=existing_hs)
 
 
 # Initialize DB on startup whether running via gunicorn or directly

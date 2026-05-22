@@ -1,0 +1,147 @@
+{% extends 'base.html' %}
+{% block title %}Edit {{ c.name }} — Park Golf Ratings{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{{ url_for('courses') }}">Courses</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('course', course_id=c.id) }}">{{ c.name }}</a></li>
+    <li class="breadcrumb-item active">Edit Holes</li>
+  </ol>
+</nav>
+
+<h2 class="mb-4">Edit Holes — {{ c.name }}</h2>
+
+{# ── Step 1: Configure hole layout ──────────────────────────────────────────── #}
+<div class="card mb-4">
+  <div class="card-header fw-semibold">Step 1 — Configure Hole Layout</div>
+  <div class="card-body">
+    {% if holes %}
+      <p class="text-muted small mb-3">
+        Currently configured: <strong>{{ holes | length }} holes</strong>
+        ({{ holes[0].hole_label }}–{{ holes[-1].hole_label }}).
+        Changing the layout will reset hole numbers — existing par/yards will be lost.
+      </p>
+    {% endif %}
+    <form method="post">
+      <input type="hidden" name="action" value="configure">
+      <div class="row g-3 align-items-end">
+        <div class="col-auto">
+          <label class="form-label fw-semibold">Number of Holes</label>
+          <select class="form-select" name="num_holes" id="numHoles">
+            <option value="9"  {% if num_holes == 9  %}selected{% endif %}>9 holes</option>
+            <option value="18" {% if num_holes == 18 %}selected{% endif %}>18 holes</option>
+          </select>
+        </div>
+        <div class="col-auto">
+          <label class="form-label fw-semibold">Hole Numbering</label>
+          <select class="form-select" name="scheme" id="schemeSelect">
+            <option value="1-9"   {% if scheme == '1-9'   %}selected{% endif %} data-holes="9">1, 2 … 9</option>
+            <option value="1-18"  {% if scheme == '1-18'  %}selected{% endif %} data-holes="18">1, 2 … 18</option>
+            <option value="A1-A9" {% if scheme == 'A1-A9' %}selected{% endif %} data-holes="9">A1, A2 … A9</option>
+            <option value="A1-B9" {% if scheme == 'A1-B9' %}selected{% endif %} data-holes="18">A1–A9, B1–B9</option>
+          </select>
+        </div>
+        <div class="col-auto">
+          <button type="submit" class="btn btn-secondary">Apply Layout</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# ── Step 2: Edit par & yards ────────────────────────────────────────────────── #}
+{% if holes %}
+<div class="card">
+  <div class="card-header fw-semibold">Step 2 — Par &amp; Yards per Hole</div>
+  <div class="card-body p-0">
+    <form method="post">
+      <input type="hidden" name="action" value="save_holes">
+      <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-3">Hole</th>
+              <th style="width:120px">Par</th>
+              <th style="width:140px">Yards</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for h in holes %}
+            <tr>
+              <td class="ps-3 fw-semibold align-middle">{{ h.hole_label }}</td>
+              <td>
+                <input type="number" class="form-control form-control-sm"
+                       name="par_{{ h.hole_label }}"
+                       value="{{ h.par or '' }}" min="2" max="5" placeholder="—">
+              </td>
+              <td>
+                <input type="number" class="form-control form-control-sm"
+                       name="yards_{{ h.hole_label }}"
+                       value="{{ h.yards or '' }}" min="1" max="999" placeholder="—">
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot class="table-light">
+            <tr>
+              <td class="ps-3 fw-semibold">Total</td>
+              <td id="totalPar" class="fw-semibold">
+                {{ holes | selectattr('par') | map(attribute='par') | sum or '—' }}
+              </td>
+              <td id="totalYards" class="fw-semibold">
+                {{ holes | selectattr('yards') | map(attribute='yards') | sum or '—' }}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <div class="p-3">
+        <button type="submit" class="btn btn-success">Save Holes</button>
+        <a href="{{ url_for('course', course_id=c.id) }}" class="btn btn-outline-secondary ms-2">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Filter scheme dropdown to only show options matching selected hole count
+(function () {
+  const numSel    = document.getElementById('numHoles');
+  const schemeSel = document.getElementById('schemeSelect');
+  function filterSchemes() {
+    const n = numSel.value;
+    Array.from(schemeSel.options).forEach(opt => {
+      opt.hidden = opt.dataset.holes !== n;
+    });
+    // Auto-select first visible option if current selection is hidden
+    if (schemeSel.options[schemeSel.selectedIndex].hidden) {
+      const first = Array.from(schemeSel.options).find(o => !o.hidden);
+      if (first) schemeSel.value = first.value;
+    }
+  }
+  numSel.addEventListener('change', filterSchemes);
+  filterSchemes();
+
+  // Live totals for par and yards
+  function liveTotals() {
+    let par = 0, yards = 0;
+    document.querySelectorAll('input[name^="par_"]').forEach(el => {
+      const v = parseInt(el.value); if (!isNaN(v)) par += v;
+    });
+    document.querySelectorAll('input[name^="yards_"]').forEach(el => {
+      const v = parseInt(el.value); if (!isNaN(v)) yards += v;
+    });
+    const tp = document.getElementById('totalPar');
+    const ty = document.getElementById('totalYards');
+    if (tp) tp.textContent = par || '—';
+    if (ty) ty.textContent = yards || '—';
+  }
+  document.querySelectorAll('input[name^="par_"], input[name^="yards_"]')
+          .forEach(el => el.addEventListener('input', liveTotals));
+})();
+</script>
+{% endblock %}
