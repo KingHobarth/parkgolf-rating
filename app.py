@@ -1522,17 +1522,51 @@ def course(course_id):
     for h in holes:
         row = db.execute('''
             SELECT COUNT(hs.score) AS cnt,
-                   AVG(hs.score)   AS avg,
-                   MIN(hs.score)   AS best
+                   AVG(hs.score)   AS avg
             FROM hole_scores hs
             JOIN rounds r ON r.id = hs.round_id
             JOIN tournaments t ON t.id = r.tournament_id
             WHERE t.course_id = ? AND hs.hole_label = ?
         ''', (course_id, h['hole_label'])).fetchone()
+
+        # Per-hole score distribution (relative to par if known)
+        dist = None
+        if h['par'] and (row['cnt'] or 0) > 0:
+            score_rows = db.execute('''
+                SELECT hs.score
+                FROM hole_scores hs
+                JOIN rounds r ON r.id = hs.round_id
+                JOIN tournaments t ON t.id = r.tournament_id
+                WHERE t.course_id = ? AND hs.hole_label = ?
+            ''', (course_id, h['hole_label'])).fetchall()
+            buckets = dict(ace=0, albatross=0, eagle=0, birdie=0,
+                           par=0, bogey=0, double=0, worse=0)
+            par = h['par']
+            for sr in score_rows:
+                diff = sr['score'] - par
+                if sr['score'] == 1:
+                    buckets['ace'] += 1
+                elif diff <= -3:
+                    buckets['albatross'] += 1
+                elif diff == -2:
+                    buckets['eagle'] += 1
+                elif diff == -1:
+                    buckets['birdie'] += 1
+                elif diff == 0:
+                    buckets['par'] += 1
+                elif diff == 1:
+                    buckets['bogey'] += 1
+                elif diff == 2:
+                    buckets['double'] += 1
+                else:
+                    buckets['worse'] += 1
+            total = len(score_rows)
+            dist = {k: round(v / total * 100, 1) for k, v in buckets.items()}
+
         hole_stats[h['hole_label']] = {
             'cnt':  row['cnt'] or 0,
             'avg':  round(row['avg'], 2) if row['avg'] else None,
-            'best': row['best'],
+            'dist': dist,
         }
 
     total_par   = sum(h['par']   for h in holes if h['par'])   or None

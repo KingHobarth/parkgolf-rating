@@ -1,6 +1,29 @@
 {% extends 'base.html' %}
 {% block title %}{{ c.name }} — Park Golf Ratings{% endblock %}
 
+{% macro dist_bar(dist) %}
+{% if dist %}
+{%- set segments = [
+  ('Ace',       dist.ace,       '#F59E0B'),
+  ('Albatross', dist.albatross, '#7C3AED'),
+  ('Eagle',     dist.eagle,     '#2563EB'),
+  ('Birdie',    dist.birdie,    '#10B981'),
+  ('Par',       dist.par,       '#9CA3AF'),
+  ('Bogey',     dist.bogey,     '#F97316'),
+  ('Double',    dist.double,    '#EF4444'),
+  ('Worse',     dist.worse,     '#991B1B'),
+] -%}
+<div class="d-flex rounded overflow-hidden" style="height:16px; min-width:120px;">
+  {% for label, pct, color in segments %}
+    {% if pct > 0 %}
+    <div style="width:{{ pct }}%; background:{{ color }};"
+         title="{{ label }}: {{ pct }}%"></div>
+    {% endif %}
+  {% endfor %}
+</div>
+{% else %}—{% endif %}
+{% endmacro %}
+
 {% block content %}
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb">
@@ -84,7 +107,7 @@
         <th class="text-center">Yards</th>
         <th class="text-center">Avg Score</th>
         <th class="text-center">vs Par</th>
-        <th class="text-center">Best Score</th>
+        <th style="min-width:160px">Score Distribution</th>
         <th class="text-center text-muted small">Scored Rounds</th>
       </tr>
     </thead>
@@ -105,9 +128,7 @@
               </span>
             {% else %}—{% endif %}
           </td>
-          <td class="text-center fw-semibold {% if hs.best and h.par and hs.best < h.par %}text-success{% endif %}">
-            {{ hs.best or '—' }}
-          </td>
+          <td>{{ dist_bar(hs.dist) }}</td>
           <td class="text-center text-muted small">{{ hs.cnt or '—' }}</td>
         </tr>
       {% endfor %}
