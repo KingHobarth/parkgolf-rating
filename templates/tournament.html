@@ -1,6 +1,30 @@
 {% extends 'base.html' %}
 {% block title %}{{ t.name }} — Park Golf Ratings{% endblock %}
 
+{# ── Score-distribution bar macro (same palette as courses/course pages) ─────── #}
+{% macro dist_bar(dist) %}
+{% if dist %}
+{%- set segments = [
+  ('Ace',       dist.ace,       '#F59E0B'),
+  ('Albatross', dist.albatross, '#7C3AED'),
+  ('Eagle',     dist.eagle,     '#2563EB'),
+  ('Birdie',    dist.birdie,    '#10B981'),
+  ('Par',       dist.par,       '#9CA3AF'),
+  ('Bogey',     dist.bogey,     '#F97316'),
+  ('Double',    dist.double,    '#EF4444'),
+  ('Worse',     dist.worse,     '#991B1B'),
+] -%}
+<div class="d-flex rounded overflow-hidden" style="height:14px; min-width:100px;">
+  {% for label, pct, color in segments %}
+    {% if pct > 0 %}
+    <div style="width:{{ pct }}%; background:{{ color }};"
+         title="{{ label }}: {{ pct }}%"></div>
+    {% endif %}
+  {% endfor %}
+</div>
+{% else %}—{% endif %}
+{% endmacro %}
+
 {% block content %}
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb">
@@ -9,7 +33,8 @@
   </ol>
 </nav>
 
-<div class="d-flex justify-content-between align-items-start mb-1">
+{# ── Header ─────────────────────────────────────────────────────────────────── #}
+<div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
   <div>
     <h2 class="mb-1">{{ t.name }}</h2>
     <p class="text-muted mb-0">
@@ -34,7 +59,7 @@
     </div>
   </div>
   {% if session.get('admin') %}
-  <div class="d-flex gap-2 ms-3 mt-1 flex-wrap">
+  <div class="d-flex gap-2 mt-1 flex-wrap">
     <a href="{{ url_for('edit_tournament', tournament_id=t.id) }}"
        class="btn btn-outline-primary btn-sm">✏️ Edit</a>
     <a href="{{ url_for('edit_hole_scores', tournament_id=t.id) }}"
@@ -45,75 +70,221 @@
   {% endif %}
 </div>
 
-{% if results %}
-<div class="table-responsive">
-  <table class="table table-hover align-middle" data-sortable>
-    <thead class="table-success">
-      <tr>
-        <th class="text-center" style="width:50px" data-sort>Place</th>
-        <th data-sort>Player</th>
-        {% for rn in round_numbers %}
-        <th class="text-center" data-sort>
-          R{{ rn }}
-          {% if rn in round_stats %}
-          <br><small class="fw-normal text-muted" title="Effective scratch — what a 1000-rated player would shoot">
-            {% if round_stats[rn].eff_scratch is not none %}
-              eff. {{ round_stats[rn].eff_scratch }} <span class="opacity-50">(avg {{ round_stats[rn].avg_score }})</span>
-            {% else %}
-              <span class="badge bg-secondary">NR</span>
+{# ── Tabs ────────────────────────────────────────────────────────────────────── #}
+<ul class="nav nav-tabs mb-3" id="tournTabs">
+  <li class="nav-item">
+    <button class="nav-link active" type="button"
+            data-bs-toggle="tab" data-bs-target="#tabLeaderboard">
+      🏆 Leaderboard
+    </button>
+  </li>
+  {% if has_hole_data %}
+  <li class="nav-item">
+    <button class="nav-link" type="button"
+            data-bs-toggle="tab" data-bs-target="#tabHoles">
+      ⛳ Hole Details
+    </button>
+  </li>
+  {% endif %}
+</ul>
+
+<div class="tab-content">
+
+  {# ══ Leaderboard tab ══════════════════════════════════════════════════════ #}
+  <div class="tab-pane fade show active" id="tabLeaderboard">
+    {% if results %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle" data-sortable>
+        <thead class="table-success">
+          <tr>
+            <th class="text-center" style="width:50px" data-sort>Place</th>
+            <th data-sort>Player</th>
+            {% for rn in round_numbers %}
+            <th class="text-center" data-sort>
+              R{{ rn }}
+              {% if rn in round_stats %}
+              <br><small class="fw-normal text-muted"
+                    title="Effective scratch — what a 1000-rated player would shoot">
+                {% if round_stats[rn].eff_scratch is not none %}
+                  eff. {{ round_stats[rn].eff_scratch }}
+                  <span class="opacity-50">(avg {{ round_stats[rn].avg_score }})</span>
+                {% else %}
+                  <span class="badge bg-secondary">NR</span>
+                {% endif %}
+              </small>
+              {% endif %}
+            </th>
+            {% endfor %}
+            {% if round_numbers|length > 1 %}
+            <th class="text-center" data-sort>Total</th>
             {% endif %}
-          </small>
-          {% endif %}
-        </th>
-        {% endfor %}
-        {% if round_numbers|length > 1 %}
-        <th class="text-center" data-sort>Total</th>
-        {% endif %}
-        <th class="text-center" data-sort>Avg Rating</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for r in results %}
-      <tr>
-        <td class="text-center text-muted fw-bold rank-cell">{{ loop.index }}</td>
-        <td>
-          <a href="{{ url_for('player', player_id=r.player_id) }}" class="text-decoration-none fw-semibold">
-            {{ r.name }}
-          </a>
-        </td>
-        {% for rn in round_numbers %}
-          {% if rn in r.rounds %}
-            <td class="text-center" data-val="{{ r.rounds[rn].score }}">
-              {{ r.rounds[rn].score }}
-              <br>
-              {% if r.rounds[rn].is_nr %}
-                <small><span class="badge bg-secondary">NR</span></small>
+            <th class="text-center" data-sort>Avg Rating</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in results %}
+          <tr>
+            <td class="text-center text-muted fw-bold rank-cell">{{ loop.index }}</td>
+            <td>
+              <a href="{{ url_for('player', player_id=r.player_id) }}"
+                 class="text-decoration-none fw-semibold">{{ r.name }}</a>
+            </td>
+            {% for rn in round_numbers %}
+              {% if rn in r.rounds %}
+                <td class="text-center" data-val="{{ r.rounds[rn].score }}">
+                  {{ r.rounds[rn].score }}<br>
+                  {% if r.rounds[rn].is_nr %}
+                    <small><span class="badge bg-secondary">NR</span></small>
+                  {% else %}
+                    <small class="text-muted">{{ r.rounds[rn].rating }}</small>
+                  {% endif %}
+                </td>
               {% else %}
-                <small class="text-muted">{{ r.rounds[rn].rating }}</small>
+                <td class="text-center text-muted">—</td>
+              {% endif %}
+            {% endfor %}
+            {% if round_numbers|length > 1 %}
+            <td class="text-center fw-semibold">{{ r.total_score }}</td>
+            {% endif %}
+            <td class="text-center" data-val="{{ r.avg_rating or 0 }}">
+              {% if r.avg_rating %}
+                <span class="badge fs-6
+                  {% if r.avg_rating >= 1000 %}bg-success
+                  {% elif r.avg_rating >= 950 %}bg-primary
+                  {% elif r.avg_rating >= 900 %}bg-info text-dark
+                  {% else %}bg-secondary{% endif %}">
+                  {{ r.avg_rating }}
+                </span>
+              {% else %}
+                <span class="badge fs-6 bg-secondary">NR</span>
               {% endif %}
             </td>
-          {% else %}
-            <td class="text-center text-muted">—</td>
-          {% endif %}
-        {% endfor %}
-        {% if round_numbers|length > 1 %}
-        <td class="text-center fw-semibold">{{ r.total_score }}</td>
-        {% endif %}
-        <td class="text-center" data-val="{{ r.avg_rating or 0 }}">
-          {% if r.avg_rating %}
-            <span class="badge fs-6 {% if r.avg_rating >= 1000 %}bg-success{% elif r.avg_rating >= 950 %}bg-primary{% elif r.avg_rating >= 900 %}bg-info text-dark{% else %}bg-secondary{% endif %}">
-              {{ r.avg_rating }}
-            </span>
-          {% else %}
-            <span class="badge fs-6 bg-secondary">NR</span>
-          {% endif %}
-        </td>
-      </tr>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-muted">No results recorded for this event.</p>
+    {% endif %}
+  </div>
+
+  {# ══ Hole Details tab ═════════════════════════════════════════════════════ #}
+  {% if has_hole_data %}
+  <div class="tab-pane fade" id="tabHoles">
+
+    {# Legend #}
+    <div class="d-flex flex-wrap gap-3 mb-3 small">
+      {% for label, color in [
+        ('Ace','#F59E0B'),('Albatross','#7C3AED'),('Eagle','#2563EB'),
+        ('Birdie','#10B981'),('Par','#9CA3AF'),
+        ('Bogey','#F97316'),('Double','#EF4444'),('Worse','#991B1B'),
+      ] %}
+      <span class="d-flex align-items-center gap-1">
+        <span style="display:inline-block;width:12px;height:12px;border-radius:2px;background:{{ color }};"></span>
+        {{ label }}
+      </span>
       {% endfor %}
-    </tbody>
-  </table>
+    </div>
+
+    {# One section per round — header only if multi-round #}
+    {% for rn in round_numbers %}
+      {% set rnd_scores = hole_scores_by_round.get(rn, {}) %}
+      {% if rnd_scores %}
+
+      {% if round_numbers|length > 1 %}
+      <h6 class="fw-bold mt-3 mb-2 text-muted text-uppercase" style="letter-spacing:.05em">
+        Round {{ rn }}
+      </h6>
+      {% endif %}
+
+      {# Sort players for this round by total score ascending #}
+      {% set rn_players = results | selectattr('rounds.' ~ rn) | list %}
+
+      <div class="table-responsive mb-4">
+        <table class="table table-sm table-bordered align-middle">
+          <thead class="table-light">
+            <tr>
+              <th style="min-width:52px">Hole</th>
+              <th class="text-center" style="min-width:40px">Par</th>
+              {% for r in results %}
+                {% if rn in r.rounds %}
+                <th class="text-center" style="min-width:60px">
+                  {{ r.name.split()[0] }}
+                </th>
+                {% endif %}
+              {% endfor %}
+              <th class="text-center text-muted" style="min-width:52px">Avg</th>
+              <th style="min-width:140px">Distribution</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for h in course_holes %}
+            {% set hs = tourn_hole_stats.get(h.hole_label, {}) %}
+            <tr>
+              <td class="fw-semibold">{{ h.hole_label }}</td>
+              <td class="text-center text-muted">{{ h.par or '—' }}</td>
+              {% for r in results %}
+                {% if rn in r.rounds %}
+                  {% set cell = hole_scores_by_round.get(rn, {}).get(r.player_id, {}).get(h.hole_label) %}
+                  {% if cell is not none %}
+                    {# Colour-code vs par #}
+                    {% if h.par %}
+                      {% set diff = cell - h.par %}
+                      {% if cell == 1 %}
+                        <td class="text-center fw-bold" style="background:#FEF3C7">{{ cell }}</td>
+                      {% elif diff <= -2 %}
+                        <td class="text-center fw-bold" style="background:#DBEAFE">{{ cell }}</td>
+                      {% elif diff == -1 %}
+                        <td class="text-center fw-semibold" style="background:#D1FAE5">{{ cell }}</td>
+                      {% elif diff == 0 %}
+                        <td class="text-center">{{ cell }}</td>
+                      {% elif diff == 1 %}
+                        <td class="text-center" style="background:#FEF9C3">{{ cell }}</td>
+                      {% elif diff == 2 %}
+                        <td class="text-center" style="background:#FEE2E2">{{ cell }}</td>
+                      {% else %}
+                        <td class="text-center fw-semibold" style="background:#FECACA">{{ cell }}</td>
+                      {% endif %}
+                    {% else %}
+                      <td class="text-center">{{ cell }}</td>
+                    {% endif %}
+                  {% else %}
+                    <td class="text-center text-muted">—</td>
+                  {% endif %}
+                {% endif %}
+              {% endfor %}
+              <td class="text-center text-muted small">{{ hs.avg or '—' }}</td>
+              <td>{{ dist_bar(hs.dist) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot class="table-light fw-semibold">
+            <tr>
+              <td>Total</td>
+              <td class="text-center">
+                {{ course_holes | selectattr('par') | map(attribute='par') | sum or '—' }}
+              </td>
+              {% for r in results %}
+                {% if rn in r.rounds %}
+                  {% set player_hs = hole_scores_by_round.get(rn, {}).get(r.player_id, {}) %}
+                  {% set hole_total = player_hs.values() | sum %}
+                  <td class="text-center">
+                    {% if player_hs %}{{ hole_total }}{% else %}—{% endif %}
+                  </td>
+                {% endif %}
+              {% endfor %}
+              <td colspan="2"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      {% endif %}
+    {% endfor %}
+
+  </div>
+  {% endif %}
+
 </div>
-{% else %}
-<p class="text-muted">No results recorded for this event.</p>
-{% endif %}
 {% endblock %}

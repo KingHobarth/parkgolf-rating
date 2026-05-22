@@ -985,7 +985,6 @@ def tournament(tournament_id):
     round_numbers = list(range(1, t['num_rounds'] + 1))
 
     # Per-round stats for display: avg score and actual derived eff_scratch
-    # eff_scratch is back-calculated from stored ratings: score + (rating - 1000) / 10
     round_stats = {}
     for row in db.execute('''
         SELECT round_number,
@@ -997,13 +996,64 @@ def tournament(tournament_id):
     ''', (tournament_id,)).fetchall():
         eff = row['eff_scratch']
         round_stats[row['round_number']] = {
-            'avg_score':  round(row['avg_score'], 1),
+            'avg_score':   round(row['avg_score'], 1),
             'eff_scratch': round(eff, 1) if eff is not None else None,
-            'is_nr': row['rated_count'] == 0,
+            'is_nr':       row['rated_count'] == 0,
         }
 
+    # ── Hole Details tab ────────────────────────────────────────────────────
+    course_holes = db.execute(
+        'SELECT * FROM course_holes WHERE course_id = ? ORDER BY sort_order',
+        (t['course_id'],)
+    ).fetchall()
+
+    hole_score_rows = db.execute('''
+        SELECT hs.hole_label, hs.score, r.round_number, r.player_id
+        FROM hole_scores hs
+        JOIN rounds r ON r.id = hs.round_id
+        WHERE r.tournament_id = ?
+    ''', (tournament_id,)).fetchall()
+
+    has_hole_data = len(hole_score_rows) > 0
+
+    # {round_number: {player_id: {hole_label: score}}}
+    hole_scores_by_round = {}
+    for hs in hole_score_rows:
+        rn  = hs['round_number']
+        pid = hs['player_id']
+        hole_scores_by_round.setdefault(rn, {}).setdefault(pid, {})[hs['hole_label']] = hs['score']
+
+    # Per-hole aggregates for this tournament (all rounds combined)
+    tourn_hole_stats = {}
+    if has_hole_data:
+        for h in course_holes:
+            scores = [hs['score'] for hs in hole_score_rows if hs['hole_label'] == h['hole_label']]
+            if not scores:
+                tourn_hole_stats[h['hole_label']] = {'avg': None, 'dist': None}
+                continue
+            avg = round(sum(scores) / len(scores), 2)
+            dist = None
+            if h['par']:
+                buckets = dict(ace=0, albatross=0, eagle=0, birdie=0,
+                               par=0, bogey=0, double=0, worse=0)
+                for s in scores:
+                    diff = s - h['par']
+                    if s == 1:          buckets['ace']       += 1
+                    elif diff <= -3:    buckets['albatross'] += 1
+                    elif diff == -2:    buckets['eagle']     += 1
+                    elif diff == -1:    buckets['birdie']    += 1
+                    elif diff == 0:     buckets['par']       += 1
+                    elif diff == 1:     buckets['bogey']     += 1
+                    elif diff == 2:     buckets['double']    += 1
+                    else:               buckets['worse']     += 1
+                dist = {k: round(v / len(scores) * 100, 1) for k, v in buckets.items()}
+            tourn_hole_stats[h['hole_label']] = {'avg': avg, 'dist': dist}
+
     return render_template('tournament.html', t=t, results=results,
-                           round_numbers=round_numbers, round_stats=round_stats)
+                           round_numbers=round_numbers, round_stats=round_stats,
+                           course_holes=course_holes, has_hole_data=has_hole_data,
+                           hole_scores_by_round=hole_scores_by_round,
+                           tourn_hole_stats=tourn_hole_stats)
 
 
 @app.route('/add', methods=['GET', 'POST'])
