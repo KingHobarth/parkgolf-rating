@@ -219,19 +219,6 @@
     </div>
     {% endif %}
 
-    {# Legend for per-hole tables #}
-    <div class="d-flex flex-wrap gap-3 mb-3 small">
-      {% for label, color in [
-        ('Ace','#F59E0B'),('Albatross','#7C3AED'),('Eagle','#2563EB'),
-        ('Birdie','#10B981'),('Par','#9CA3AF'),
-        ('Bogey','#F97316'),('Double','#EF4444'),('Worse','#991B1B'),
-      ] %}
-      <span class="d-flex align-items-center gap-1">
-        <span style="display:inline-block;width:12px;height:12px;border-radius:2px;background:{{ color }};"></span>
-        {{ label }}
-      </span>
-      {% endfor %}
-    </div>
 
     {# One section per round — header only if multi-round #}
     {% for rn in round_numbers %}
