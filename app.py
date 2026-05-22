@@ -1391,6 +1391,50 @@ def calculator():
 
 # ── Courses ────────────────────────────────────────────────────────────────────
 
+def _hole_score_distribution(db, course_id):
+    """
+    Return a dict of percentage breakdowns (ace, albatross, eagle, birdie, par,
+    bogey, double, worse) for all hole scores recorded at this course where par
+    is known.  Returns None if there is no data.
+    """
+    rows = db.execute('''
+        SELECT hs.score, ch.par
+        FROM hole_scores hs
+        JOIN rounds r       ON r.id          = hs.round_id
+        JOIN tournaments t  ON t.id          = r.tournament_id
+        JOIN course_holes ch ON ch.course_id = t.course_id
+                             AND ch.hole_label = hs.hole_label
+        WHERE t.course_id = ? AND ch.par IS NOT NULL
+    ''', (course_id,)).fetchall()
+
+    if not rows:
+        return None
+
+    buckets = dict(ace=0, albatross=0, eagle=0, birdie=0,
+                   par=0, bogey=0, double=0, worse=0)
+    for row in rows:
+        diff = row['score'] - row['par']
+        if row['score'] == 1:
+            buckets['ace'] += 1
+        elif diff <= -3:
+            buckets['albatross'] += 1
+        elif diff == -2:
+            buckets['eagle'] += 1
+        elif diff == -1:
+            buckets['birdie'] += 1
+        elif diff == 0:
+            buckets['par'] += 1
+        elif diff == 1:
+            buckets['bogey'] += 1
+        elif diff == 2:
+            buckets['double'] += 1
+        else:
+            buckets['worse'] += 1
+
+    total = len(rows)
+    return {k: round(v / total * 100, 1) for k, v in buckets.items()}
+
+
 @app.route('/courses')
 def courses():
     db = get_db()
@@ -1419,6 +1463,7 @@ def courses():
             'total_par':     total_par,
             'total_yards':   total_yards,
             'num_holes':     len(holes),
+            'dist':          _hole_score_distribution(db, c['id']),
         })
     return render_template('courses.html', courses=course_list)
 

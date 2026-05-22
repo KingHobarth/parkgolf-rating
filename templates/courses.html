@@ -1,9 +1,54 @@
 {% extends 'base.html' %}
 {% block title %}Courses — Park Golf Ratings{% endblock %}
 
+{# ── Score-distribution bar macro ───────────────────────────────────────────── #}
+{% macro dist_bar(dist) %}
+{% if dist %}
+{%- set segments = [
+  ('Ace',         dist.ace,       '#F59E0B'),
+  ('Albatross',   dist.albatross, '#7C3AED'),
+  ('Eagle',       dist.eagle,     '#2563EB'),
+  ('Birdie',      dist.birdie,    '#10B981'),
+  ('Par',         dist.par,       '#9CA3AF'),
+  ('Bogey',       dist.bogey,     '#F97316'),
+  ('Double',      dist.double,    '#EF4444'),
+  ('Worse',       dist.worse,     '#991B1B'),
+] -%}
+<div class="d-flex rounded overflow-hidden" style="height:18px; min-width:160px;">
+  {% for label, pct, color in segments %}
+    {% if pct > 0 %}
+    <div style="width:{{ pct }}%; background:{{ color }};"
+         title="{{ label }}: {{ pct }}%"></div>
+    {% endif %}
+  {% endfor %}
+</div>
+{% else %}
+<span class="text-muted small">no data</span>
+{% endif %}
+{% endmacro %}
+
 {% block content %}
 <h2 class="mb-1">Courses</h2>
-<p class="text-muted mb-4">Every course in the Park Golf Ratings system — click a course for full stats and hole details.</p>
+<p class="text-muted mb-3">Every course in the Park Golf Ratings system — click a course for full stats and hole details.</p>
+
+{# ── Legend ─────────────────────────────────────────────────────────────────── #}
+<div class="d-flex flex-wrap gap-3 mb-4 small">
+  {% for label, color in [
+    ('Ace',       '#F59E0B'),
+    ('Albatross', '#7C3AED'),
+    ('Eagle',     '#2563EB'),
+    ('Birdie',    '#10B981'),
+    ('Par',       '#9CA3AF'),
+    ('Bogey',     '#F97316'),
+    ('Double',    '#EF4444'),
+    ('Worse',     '#991B1B'),
+  ] %}
+  <span class="d-flex align-items-center gap-1">
+    <span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:{{ color }};"></span>
+    {{ label }}
+  </span>
+  {% endfor %}
+</div>
 
 {% if not courses %}
   <div class="alert alert-info">No courses have been added yet.</div>
@@ -18,8 +63,8 @@
         <th class="text-center" data-sort>Par</th>
         <th class="text-center" data-sort>Yards</th>
         <th class="text-center" data-sort>Rounds</th>
-        <th class="text-center" data-sort>Record</th>
         <th class="text-center" data-sort>Avg Score</th>
+        <th style="min-width:180px">Score Distribution</th>
       </tr>
     </thead>
     <tbody>
@@ -35,12 +80,10 @@
         <td class="text-center">{{ c.total_par or '—' }}</td>
         <td class="text-center">{{ c.total_yards or '—' }}</td>
         <td class="text-center" data-val="{{ c.num_rounds }}">{{ c.num_rounds }}</td>
-        <td class="text-center fw-semibold text-success" data-val="{{ c.course_record or '' }}">
-          {{ c.course_record or '—' }}
-        </td>
         <td class="text-center" data-val="{{ c.avg_score or '' }}">
           {{ c.avg_score or '—' }}
         </td>
+        <td>{{ dist_bar(c.dist) }}</td>
       </tr>
       {% endfor %}
     </tbody>
