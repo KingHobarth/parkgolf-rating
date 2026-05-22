@@ -1023,37 +1023,74 @@ def tournament(tournament_id):
         pid = hs['player_id']
         hole_scores_by_round.setdefault(rn, {}).setdefault(pid, {})[hs['hole_label']] = hs['score']
 
-    # Per-hole aggregates for this tournament (all rounds combined)
-    tourn_hole_stats = {}
+    def _build_hole_stats(scores_subset, par):
+        """Given a list of raw scores and a par value, return {avg, dist}."""
+        if not scores_subset:
+            return {'avg': None, 'dist': None}
+        avg = round(sum(scores_subset) / len(scores_subset), 2)
+        dist = None
+        if par:
+            buckets = dict(ace=0, albatross=0, eagle=0, birdie=0,
+                           par=0, bogey=0, double=0, worse=0)
+            for s in scores_subset:
+                diff = s - par
+                if s == 1:       buckets['ace']       += 1
+                elif diff <= -3: buckets['albatross'] += 1
+                elif diff == -2: buckets['eagle']     += 1
+                elif diff == -1: buckets['birdie']    += 1
+                elif diff == 0:  buckets['par']       += 1
+                elif diff == 1:  buckets['bogey']     += 1
+                elif diff == 2:  buckets['double']    += 1
+                else:            buckets['worse']     += 1
+            dist = {k: round(v / len(scores_subset) * 100, 1) for k, v in buckets.items()}
+        return {'avg': avg, 'dist': dist}
+
+    # Per-hole stats keyed by round: {round_number: {hole_label: {avg, dist}}}
+    # Also overall event stats per hole (all rounds combined): {hole_label: {avg, dist}}
+    round_hole_stats  = {}   # per-round, used in each round's table column
+    tourn_hole_stats  = {}   # all-rounds combined, used in the event summary bar
+    overall_event_dist = None  # single distribution across every hole score in event
+
     if has_hole_data:
+        par_map = {h['hole_label']: h['par'] for h in course_holes}
+
         for h in course_holes:
-            scores = [hs['score'] for hs in hole_score_rows if hs['hole_label'] == h['hole_label']]
-            if not scores:
-                tourn_hole_stats[h['hole_label']] = {'avg': None, 'dist': None}
-                continue
-            avg = round(sum(scores) / len(scores), 2)
-            dist = None
-            if h['par']:
-                buckets = dict(ace=0, albatross=0, eagle=0, birdie=0,
-                               par=0, bogey=0, double=0, worse=0)
-                for s in scores:
-                    diff = s - h['par']
-                    if s == 1:          buckets['ace']       += 1
-                    elif diff <= -3:    buckets['albatross'] += 1
-                    elif diff == -2:    buckets['eagle']     += 1
-                    elif diff == -1:    buckets['birdie']    += 1
-                    elif diff == 0:     buckets['par']       += 1
-                    elif diff == 1:     buckets['bogey']     += 1
-                    elif diff == 2:     buckets['double']    += 1
-                    else:               buckets['worse']     += 1
-                dist = {k: round(v / len(scores) * 100, 1) for k, v in buckets.items()}
-            tourn_hole_stats[h['hole_label']] = {'avg': avg, 'dist': dist}
+            label = h['hole_label']
+            par   = h['par']
+            all_scores = [hs['score'] for hs in hole_score_rows if hs['hole_label'] == label]
+            tourn_hole_stats[label] = _build_hole_stats(all_scores, par)
+
+            for rn in round_numbers:
+                rn_scores = [hs['score'] for hs in hole_score_rows
+                             if hs['hole_label'] == label and hs['round_number'] == rn]
+                round_hole_stats.setdefault(rn, {})[label] = _build_hole_stats(rn_scores, par)
+
+        # Overall event distribution: bucket every hole score that has a known par
+        all_scored = [(hs['score'], par_map.get(hs['hole_label'])) for hs in hole_score_rows
+                      if par_map.get(hs['hole_label']) is not None]
+        if all_scored:
+            buckets = dict(ace=0, albatross=0, eagle=0, birdie=0,
+                           par=0, bogey=0, double=0, worse=0)
+            for s, par in all_scored:
+                diff = s - par
+                if s == 1:       buckets['ace']       += 1
+                elif diff <= -3: buckets['albatross'] += 1
+                elif diff == -2: buckets['eagle']     += 1
+                elif diff == -1: buckets['birdie']    += 1
+                elif diff == 0:  buckets['par']       += 1
+                elif diff == 1:  buckets['bogey']     += 1
+                elif diff == 2:  buckets['double']    += 1
+                else:            buckets['worse']     += 1
+            total = len(all_scored)
+            overall_event_dist = {k: round(v / total * 100, 1) for k, v in buckets.items()}
 
     return render_template('tournament.html', t=t, results=results,
                            round_numbers=round_numbers, round_stats=round_stats,
                            course_holes=course_holes, has_hole_data=has_hole_data,
                            hole_scores_by_round=hole_scores_by_round,
-                           tourn_hole_stats=tourn_hole_stats)
+                           tourn_hole_stats=tourn_hole_stats,
+                           round_hole_stats=round_hole_stats,
+                           overall_event_dist=overall_event_dist)
 
 
 @app.route('/add', methods=['GET', 'POST'])

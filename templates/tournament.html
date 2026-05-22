@@ -173,7 +173,53 @@
   {% if has_hole_data %}
   <div class="tab-pane fade" id="tabHoles">
 
-    {# Legend #}
+    {# ── Overall event distribution bar ──────────────────────────────────── #}
+    {% if overall_event_dist %}
+    <div class="card mb-4">
+      <div class="card-header fw-semibold">Overall Event Score Distribution</div>
+      <div class="card-body py-3">
+        {%- set segments = [
+          ('Ace',       overall_event_dist.ace,       '#F59E0B'),
+          ('Albatross', overall_event_dist.albatross, '#7C3AED'),
+          ('Eagle',     overall_event_dist.eagle,     '#2563EB'),
+          ('Birdie',    overall_event_dist.birdie,    '#10B981'),
+          ('Par',       overall_event_dist.par,       '#9CA3AF'),
+          ('Bogey',     overall_event_dist.bogey,     '#F97316'),
+          ('Double',    overall_event_dist.double,    '#EF4444'),
+          ('Worse',     overall_event_dist.worse,     '#991B1B'),
+        ] -%}
+        <div class="d-flex rounded overflow-hidden mb-2" style="height:28px;">
+          {% for label, pct, color in segments %}
+            {% if pct > 0 %}
+            <div style="width:{{ pct }}%; background:{{ color }}; position:relative;"
+                 title="{{ label }}: {{ pct }}%">
+              {% if pct >= 6 %}
+              <span style="position:absolute;inset:0;display:flex;align-items:center;
+                           justify-content:center;color:#fff;font-size:.7rem;font-weight:600;
+                           text-shadow:0 1px 2px rgba(0,0,0,.5);">
+                {{ pct }}%
+              </span>
+              {% endif %}
+            </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+        {# Legend #}
+        <div class="d-flex flex-wrap gap-3 small mt-1">
+          {% for label, pct, color in segments %}
+          {% if pct > 0 %}
+          <span class="d-flex align-items-center gap-1">
+            <span style="display:inline-block;width:12px;height:12px;border-radius:2px;background:{{ color }};"></span>
+            {{ label }} <span class="text-muted">{{ pct }}%</span>
+          </span>
+          {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    {# Legend for per-hole tables #}
     <div class="d-flex flex-wrap gap-3 mb-3 small">
       {% for label, color in [
         ('Ace','#F59E0B'),('Albatross','#7C3AED'),('Eagle','#2563EB'),
@@ -220,7 +266,7 @@
           </thead>
           <tbody>
             {% for h in course_holes %}
-            {% set hs = tourn_hole_stats.get(h.hole_label, {}) %}
+            {% set hs = round_hole_stats.get(rn, {}).get(h.hole_label, {}) %}
             <tr>
               <td class="fw-semibold">{{ h.hole_label }}</td>
               <td class="text-center text-muted">{{ h.par or '—' }}</td>
