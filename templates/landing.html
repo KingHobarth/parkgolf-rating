@@ -118,6 +118,7 @@
     </a>
   </div>
 
+  {% if session.get('admin') %}
   <div class="col-sm-6 col-lg-4">
     <a href="{{ url_for('calculator') }}" class="text-decoration-none">
       <div class="card h-100 border-info shadow-sm pg-feature-card">
@@ -133,6 +134,7 @@
       </div>
     </a>
   </div>
+  {% endif %}
 
   <div class="col-sm-6 col-lg-4">
     <a href="{{ url_for('courses') }}" class="text-decoration-none">

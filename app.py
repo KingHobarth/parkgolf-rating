@@ -1433,6 +1433,7 @@ def reset_baselines():
 
 
 @app.route('/calculator')
+@admin_required
 def calculator():
     db = get_db()
     courses = db.execute('SELECT * FROM courses ORDER BY name').fetchall()
