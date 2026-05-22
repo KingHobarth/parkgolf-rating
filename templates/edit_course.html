@@ -10,7 +10,32 @@
   </ol>
 </nav>
 
-<h2 class="mb-4">Edit Holes — {{ c.name }}</h2>
+<h2 class="mb-4">Edit Course — {{ c.name }}</h2>
+
+{# ── Course Info ─────────────────────────────────────────────────────────────── #}
+<div class="card mb-4">
+  <div class="card-header fw-semibold">Course Info</div>
+  <div class="card-body">
+    <form method="post">
+      <input type="hidden" name="action" value="save_info">
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">City</label>
+          <input type="text" class="form-control" name="city"
+                 value="{{ c.location or '' }}" placeholder="e.g. Columbus, OH">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label fw-semibold">Address</label>
+          <input type="text" class="form-control" name="address"
+                 value="{{ c.address or '' }}" placeholder="e.g. 123 Park Ave">
+        </div>
+        <div class="col-auto d-flex align-items-end">
+          <button type="submit" class="btn btn-success">Save Info</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
 
 {# ── Step 1: Configure hole layout ──────────────────────────────────────────── #}
 <div class="card mb-4">

@@ -430,10 +430,12 @@ def init_db():
     if 'league' not in tourcols:
         db.execute("ALTER TABLE tournaments ADD COLUMN league TEXT")
 
-    # Migrate: rating_adjustment column on courses (kept for potential future use)
+    # Migrate: rating_adjustment + address columns on courses
     ccols = [r[1] for r in db.execute("PRAGMA table_info(courses)").fetchall()]
     if 'rating_adjustment' not in ccols:
         db.execute("ALTER TABLE courses ADD COLUMN rating_adjustment REAL DEFAULT 0")
+    if 'address' not in ccols:
+        db.execute("ALTER TABLE courses ADD COLUMN address TEXT")
     db.execute("UPDATE courses SET rating_adjustment = 0 WHERE rating_adjustment IS NULL")
     # Reset any previously set adjustment — new formula derives scratch from player ratings
     db.execute("UPDATE courses SET rating_adjustment = 0")
@@ -1508,7 +1510,15 @@ def edit_course(course_id):
     if request.method == 'POST':
         action = request.form.get('action', 'save_holes')
 
-        if action == 'configure':
+        if action == 'save_info':
+            city    = request.form.get('city',    '').strip() or None
+            address = request.form.get('address', '').strip() or None
+            db.execute('UPDATE courses SET location = ?, address = ? WHERE id = ?',
+                       (city, address, course_id))
+            db.commit()
+            flash('Course info saved.', 'success')
+
+        elif action == 'configure':
             num_holes = int(request.form.get('num_holes', 18))
             scheme    = request.form.get('scheme', '1-18')
             db.execute('DELETE FROM course_holes WHERE course_id = ?', (course_id,))
