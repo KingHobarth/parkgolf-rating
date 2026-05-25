@@ -677,8 +677,12 @@ def recalculate_ratings(db):
 
 def update_player_ratings(db):
     """Compute all player ratings and persist current_rating + peak_rating.
-    peak_rating never decreases — it holds the all-time high.
+    peak_rating is rebuilt from scratch each time so deleting tournaments
+    always produces accurate stats.
     """
+    # Reset peak_rating so it reflects only actual current data
+    db.execute("UPDATE players SET peak_rating = NULL")
+
     all_rounds = fetch_rounds_for_rating(db)
     player_map = {}
     for r in all_rounds:
