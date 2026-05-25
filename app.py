@@ -886,9 +886,9 @@ def player(player_id):
         res_i = compute_player_rating(rounds_raw_sorted[:i + 1])
         rolling_map[rounds_raw_sorted[i]['round_id']] = res_i['rating']
 
-    # Build chart data — only include rated rounds in the chart
+    # Build chart data — oldest to newest (left → right on the trend line)
     chart_data = []
-    for r in rounds:
+    for r in reversed(rounds):
         if r['is_nr']:
             continue  # NR rounds don't appear on the chart
         if r['round_id'] in excluded_ids:
