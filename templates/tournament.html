@@ -267,7 +267,7 @@
                     {% if h.par %}
                       {% set diff = cell - h.par %}
                       {% if cell == 1 %}
-                        <td class="text-center fw-bold" style="background:#FEF3C7">{{ cell }}</td>
+                        <td class="text-center fw-bold" style="background:linear-gradient(135deg,#ff0000,#ff8800,#ffee00,#00cc44,#0088ff,#8800ff);color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.6);">{{ cell }}</td>
                       {% elif diff <= -2 %}
                         <td class="text-center fw-bold" style="background:#DBEAFE">{{ cell }}</td>
                       {% elif diff == -1 %}
