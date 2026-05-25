@@ -863,7 +863,7 @@ def player(player_id):
         JOIN tournaments t ON t.id = r.tournament_id
         JOIN courses c ON c.id = t.course_id
         WHERE r.player_id = ?
-        ORDER BY t.sort_date, r.round_number
+        ORDER BY t.sort_date DESC, r.round_number DESC
     ''', (player_id,)).fetchall()
 
     rated_rounds = [r for r in rounds if not r['is_nr']]
