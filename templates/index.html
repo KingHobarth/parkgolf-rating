@@ -28,12 +28,12 @@
   {% if available_years %}
   <div class="d-flex align-items-center gap-1 flex-wrap">
     <span class="text-muted small me-1">Season:</span>
-    <a href="{{ url_for('index') }}"
+    <a href="{{ url_for('leaderboard') }}"
        class="btn btn-sm {% if selected_year == 'all' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
       All-Time
     </a>
     {% for yr in available_years %}
-    <a href="{{ url_for('index', year=yr) }}"
+    <a href="{{ url_for('leaderboard', year=yr) }}"
        class="btn btn-sm {% if selected_year == yr %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
       {{ yr }}
     </a>
