@@ -931,7 +931,7 @@ def events():
         JOIN courses c ON c.id = t.course_id
         LEFT JOIN rounds r ON r.tournament_id = t.id
         GROUP BY t.id
-        ORDER BY t.sort_date
+        ORDER BY t.sort_date DESC
     ''').fetchall()
     return render_template('events.html', tournaments=tournaments)
 
