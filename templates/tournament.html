@@ -266,20 +266,23 @@
                     {# Colour-code vs par #}
                     {% if h.par %}
                       {% set diff = cell - h.par %}
+                      {% set ws = "color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.5);" %}
                       {% if cell == 1 %}
-                        <td class="text-center fw-bold" style="background:linear-gradient(135deg,#ff0000,#ff8800,#ffee00,#00cc44,#0088ff,#8800ff);color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.6);">{{ cell }}</td>
-                      {% elif diff <= -2 %}
-                        <td class="text-center fw-bold" style="background:#DBEAFE">{{ cell }}</td>
+                        <td class="text-center fw-bold" style="background:linear-gradient(135deg,#ff0000,#ff8800,#ffee00,#00cc44,#0088ff,#8800ff);{{ ws }}">{{ cell }}</td>
+                      {% elif diff <= -3 %}
+                        <td class="text-center fw-bold" style="background:#7C3AED;{{ ws }}">{{ cell }}</td>
+                      {% elif diff == -2 %}
+                        <td class="text-center fw-bold" style="background:#2563EB;{{ ws }}">{{ cell }}</td>
                       {% elif diff == -1 %}
-                        <td class="text-center fw-semibold" style="background:#D1FAE5">{{ cell }}</td>
+                        <td class="text-center fw-semibold" style="background:#10B981;{{ ws }}">{{ cell }}</td>
                       {% elif diff == 0 %}
-                        <td class="text-center">{{ cell }}</td>
+                        <td class="text-center fw-semibold" style="background:#9CA3AF;{{ ws }}">{{ cell }}</td>
                       {% elif diff == 1 %}
-                        <td class="text-center" style="background:#FEF9C3">{{ cell }}</td>
+                        <td class="text-center fw-semibold" style="background:#F97316;{{ ws }}">{{ cell }}</td>
                       {% elif diff == 2 %}
-                        <td class="text-center" style="background:#FEE2E2">{{ cell }}</td>
+                        <td class="text-center fw-semibold" style="background:#EF4444;{{ ws }}">{{ cell }}</td>
                       {% else %}
-                        <td class="text-center fw-semibold" style="background:#FECACA">{{ cell }}</td>
+                        <td class="text-center fw-semibold" style="background:#991B1B;{{ ws }}">{{ cell }}</td>
                       {% endif %}
                     {% else %}
                       <td class="text-center">{{ cell }}</td>
