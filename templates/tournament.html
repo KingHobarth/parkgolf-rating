@@ -133,7 +133,9 @@
               {% if rn in r.rounds %}
                 <td class="text-center" data-val="{{ r.rounds[rn].score }}">
                   {{ r.rounds[rn].score }}<br>
-                  {% if r.rounds[rn].is_nr %}
+                  {% if r.rounds[rn].is_exhibition %}
+                    <small><span class="badge bg-warning text-dark">EXH</span></small>
+                  {% elif r.rounds[rn].is_nr %}
                     <small><span class="badge bg-secondary">NR</span></small>
                   {% else %}
                     <small class="text-muted">{{ r.rounds[rn].rating }}</small>
@@ -155,6 +157,8 @@
                   {% else %}bg-secondary{% endif %}">
                   {{ r.avg_rating }}
                 </span>
+              {% elif r.rounds.values() | selectattr('is_exhibition') | list %}
+                <span class="badge fs-6 bg-warning text-dark">EXH</span>
               {% else %}
                 <span class="badge fs-6 bg-secondary">NR</span>
               {% endif %}

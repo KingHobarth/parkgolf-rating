@@ -113,10 +113,11 @@
     <tbody>
       {% for r in rounds %}
       {% set is_nr = r.is_nr %}
-      {% set is_excluded = (not is_nr) and r.round_id in excluded_ids %}
-      {% set is_expired  = (not is_nr) and r.round_id in expired_ids %}
-      {% set is_recent   = (not is_nr) and r.round_id in recent_ids %}
-      <tr{% if is_excluded or is_expired or is_nr %} class="opacity-50"{% endif %}>
+      {% set is_exh = r.is_exhibition %}
+      {% set is_excluded = (not is_nr) and (not is_exh) and r.round_id in excluded_ids %}
+      {% set is_expired  = (not is_nr) and (not is_exh) and r.round_id in expired_ids %}
+      {% set is_recent   = (not is_nr) and (not is_exh) and r.round_id in recent_ids %}
+      <tr{% if is_excluded or is_expired or is_nr or is_exh %} class="opacity-50"{% endif %}>
         <td>
           <a href="{{ url_for('tournament', tournament_id=r.tournament_id) }}" class="text-decoration-none">
             {{ r.tournament_name }}
@@ -127,7 +128,9 @@
         <td class="text-center" data-val="{{ r.round_number }}">R{{ r.round_number }}</td>
         <td class="text-center {% if is_excluded %}text-decoration-line-through text-muted{% endif %}">{{ r.score }}</td>
         <td class="text-center" data-val="{{ r.rating if not is_nr else 0 }}">
-          {% if is_nr %}
+          {% if is_exh %}
+            <span class="badge bg-warning text-dark" title="Exhibition — contributed to field rating but not counted for this player">EXH</span>
+          {% elif is_nr %}
             <span class="badge bg-secondary" title="Not rated — fewer than 3 established players in this round">NR</span>
           {% elif is_excluded %}
             <span class="badge bg-warning text-dark" title="Excluded: &gt;2σ below your mean">{{ r.rating }} excl.</span>
@@ -140,7 +143,7 @@
           {% endif %}
         </td>
         <td class="text-center small text-muted">
-          {% if is_nr or is_excluded or is_expired %}—
+          {% if is_nr or is_exh or is_excluded or is_expired %}—
           {% elif is_recent %}<span class="badge bg-success bg-opacity-25 text-success border border-success fw-bold">2×</span>
           {% else %}1×{% endif %}
         </td>

@@ -446,6 +446,11 @@ def init_db():
         db.execute("ALTER TABLE rounds ADD COLUMN is_nr INTEGER DEFAULT 0")
     db.execute("UPDATE rounds SET is_nr = 0 WHERE is_nr IS NULL")
 
+    # Migrate: is_exhibition column on rounds (score counts toward field, not player rating)
+    if 'is_exhibition' not in rcols:
+        db.execute("ALTER TABLE rounds ADD COLUMN is_exhibition INTEGER DEFAULT 0")
+    db.execute("UPDATE rounds SET is_exhibition = 0 WHERE is_exhibition IS NULL")
+
     # Migrate: division column on players
     pcols = [r[1] for r in db.execute("PRAGMA table_info(players)").fetchall()]
     if 'division' not in pcols:
@@ -495,7 +500,8 @@ def init_db():
     all_rounds = db.execute('''
         SELECT r.id AS round_id, r.rating, r.round_number, t.sort_date, r.player_id
         FROM rounds r JOIN tournaments t ON t.id = r.tournament_id
-        WHERE r.is_nr = 0 OR r.is_nr IS NULL
+        WHERE (r.is_nr = 0 OR r.is_nr IS NULL)
+          AND (r.is_exhibition = 0 OR r.is_exhibition IS NULL)
     ''').fetchall()
     pmap = {}
     for r in all_rounds:
@@ -600,7 +606,7 @@ def recalculate_ratings(db):
 
         for round_number in round_numbers:
             round_rows = db.execute(
-                'SELECT id, score, player_id FROM rounds '
+                'SELECT id, score, player_id, COALESCE(is_exhibition, 0) AS is_exhibition FROM rounds '
                 'WHERE tournament_id = ? AND round_number = ?',
                 (tid, round_number)
             ).fetchall()
@@ -653,18 +659,24 @@ def recalculate_ratings(db):
                     round_rating = round(1000 + (eff_scratch - r['score']) * slope)
                     db.execute('UPDATE rounds SET rating = ?, is_nr = 0 WHERE id = ?',
                                (round_rating, r['id']))
-                    pid = r['player_id']
-                    if pid not in player_round_history:
-                        player_round_history[pid] = []
-                    player_round_history[pid].append({
-                        'round_id':     r['id'],
-                        'rating':       round_rating,
-                        'sort_date':    sort_date,
-                        'round_number': round_number,
-                    })
+                    # Exhibition rounds contribute to field calibration but not the
+                    # player's own rating history — skip adding to player_round_history.
+                    if not r['is_exhibition']:
+                        pid = r['player_id']
+                        if pid not in player_round_history:
+                            player_round_history[pid] = []
+                        player_round_history[pid].append({
+                            'round_id':     r['id'],
+                            'rating':       round_rating,
+                            'sort_date':    sort_date,
+                            'round_number': round_number,
+                        })
 
-                # Update player_ratings immediately so the next round can use them
+                # Update player_ratings immediately so the next round can use them.
+                # Skip exhibition players — their rating should not change from this round.
                 for r in round_rows:
+                    if r['is_exhibition']:
+                        continue
                     pid = r['player_id']
                     if pid in player_round_history:
                         result = compute_player_rating(player_round_history[pid])
@@ -705,12 +717,14 @@ def update_player_ratings(db):
 
 
 def fetch_rounds_for_rating(db, player_id=None):
-    """Fetch all officially-rated rounds (is_nr = 0) in the shape compute_player_rating expects."""
+    """Fetch all officially-rated, non-exhibition rounds in the shape compute_player_rating expects."""
     if player_id:
         rows = db.execute('''
             SELECT r.id AS round_id, r.rating, r.round_number, t.sort_date
             FROM rounds r JOIN tournaments t ON t.id = r.tournament_id
-            WHERE r.player_id = ? AND (r.is_nr = 0 OR r.is_nr IS NULL)
+            WHERE r.player_id = ?
+              AND (r.is_nr = 0 OR r.is_nr IS NULL)
+              AND (r.is_exhibition = 0 OR r.is_exhibition IS NULL)
         ''', (player_id,)).fetchall()
     else:
         rows = db.execute('''
@@ -719,7 +733,8 @@ def fetch_rounds_for_rating(db, player_id=None):
             FROM rounds r
             JOIN tournaments t ON t.id = r.tournament_id
             JOIN players p ON p.id = r.player_id
-            WHERE r.is_nr = 0 OR r.is_nr IS NULL
+            WHERE (r.is_nr = 0 OR r.is_nr IS NULL)
+              AND (r.is_exhibition = 0 OR r.is_exhibition IS NULL)
         ''').fetchall()
     return [dict(r) for r in rows]
 
@@ -861,6 +876,7 @@ def player(player_id):
 
     rounds = db.execute('''
         SELECT r.id AS round_id, r.round_number, r.score, r.rating, r.is_nr,
+               COALESCE(r.is_exhibition, 0) AS is_exhibition,
                t.id AS tournament_id, t.name AS tournament_name, t.date, t.sort_date,
                c.name AS course_name, c.course_rating
         FROM rounds r
@@ -870,15 +886,17 @@ def player(player_id):
         ORDER BY t.sort_date DESC, r.round_number DESC
     ''', (player_id,)).fetchall()
 
-    rated_rounds = [r for r in rounds if not r['is_nr']]
+    rated_rounds = [r for r in rounds if not r['is_nr'] and not r['is_exhibition']]
     all_ratings = [r['rating'] for r in rated_rounds]
+    exh_count = sum(1 for r in rounds if r['is_exhibition'])
     stats = {
         'rating': result['rating'],
         'num_rounds': result['rounds_used'],
         'total_rounds': len(rated_rounds),
         'excluded': len(excluded_ids),
         'expired': len(expired_ids),
-        'nr_count': len(rounds) - len(rated_rounds),
+        'nr_count': len(rounds) - len(rated_rounds) - exh_count,
+        'exh_count': exh_count,
         'best_rating': max(all_ratings) if all_ratings else None,
         'worst_rating': min(all_ratings) if all_ratings else None,
     }
@@ -893,8 +911,8 @@ def player(player_id):
     # Build chart data — oldest to newest (left → right on the trend line)
     chart_data = []
     for r in reversed(rounds):
-        if r['is_nr']:
-            continue  # NR rounds don't appear on the chart
+        if r['is_nr'] or r['is_exhibition']:
+            continue  # NR and exhibition rounds don't appear on the chart
         if r['round_id'] in excluded_ids:
             status = 'excluded'
         elif r['round_id'] in expired_ids:
@@ -954,7 +972,8 @@ def tournament(tournament_id):
 
     players_raw = db.execute('''
         SELECT p.id AS player_id, p.name,
-               r.round_number, r.score, r.rating, r.is_nr
+               r.round_number, r.score, r.rating, r.is_nr,
+               COALESCE(r.is_exhibition, 0) AS is_exhibition
         FROM rounds r
         JOIN players p ON p.id = r.player_id
         WHERE r.tournament_id = ?
@@ -967,14 +986,15 @@ def tournament(tournament_id):
         if pid not in player_map:
             player_map[pid] = {'name': row['name'], 'player_id': pid, 'rounds': {}}
         player_map[pid]['rounds'][row['round_number']] = {
-            'score': row['score'], 'rating': row['rating'], 'is_nr': bool(row['is_nr'])
+            'score': row['score'], 'rating': row['rating'],
+            'is_nr': bool(row['is_nr']), 'is_exhibition': bool(row['is_exhibition'])
         }
 
     results = []
     for pid, data in player_map.items():
         rounds = data['rounds']
         total_score = sum(r['score'] for r in rounds.values())
-        rated_rounds = [r for r in rounds.values() if not r['is_nr']]
+        rated_rounds = [r for r in rounds.values() if not r['is_nr'] and not r['is_exhibition']]
         avg_rating = round(sum(r['rating'] for r in rated_rounds) / len(rated_rounds)) if rated_rounds else None
         results.append({
             'player_id': pid,
@@ -1184,10 +1204,11 @@ def add_tournament():
                 player_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
 
             for round_number, score in scores:
+                is_exhibition = 1 if request.form.get(f'exh_{i}_{round_number}') else 0
                 rating = calculate_rating(course['course_rating'], score)
                 db.execute(
-                    'INSERT INTO rounds (tournament_id, player_id, round_number, score, rating) VALUES (?, ?, ?, ?, ?)',
-                    (tournament_id, player_id, round_number, score, rating)
+                    'INSERT INTO rounds (tournament_id, player_id, round_number, score, rating, is_exhibition) VALUES (?, ?, ?, ?, ?, ?)',
+                    (tournament_id, player_id, round_number, score, rating, is_exhibition)
                 )
                 inserted += 1
 
@@ -1378,10 +1399,11 @@ def edit_tournament(tournament_id):
                 player_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
 
             for round_number, score in scores:
+                is_exhibition = 1 if request.form.get(f'exh_{i}_{round_number}') else 0
                 rating = calculate_rating(course['course_rating'], score)
                 db.execute(
-                    'INSERT INTO rounds (tournament_id, player_id, round_number, score, rating) VALUES (?, ?, ?, ?, ?)',
-                    (tournament_id, player_id, round_number, score, rating)
+                    'INSERT INTO rounds (tournament_id, player_id, round_number, score, rating, is_exhibition) VALUES (?, ?, ?, ?, ?, ?)',
+                    (tournament_id, player_id, round_number, score, rating, is_exhibition)
                 )
                 inserted += 1
 
@@ -1399,7 +1421,8 @@ def edit_tournament(tournament_id):
 
     # GET: load existing players/scores for pre-population
     players_raw = db.execute('''
-        SELECT p.id, p.name, p.division, r.round_number, r.score
+        SELECT p.id, p.name, p.division, r.round_number, r.score,
+               COALESCE(r.is_exhibition, 0) AS is_exhibition
         FROM rounds r JOIN players p ON p.id = r.player_id
         WHERE r.tournament_id = ?
         ORDER BY p.name, r.round_number
@@ -1410,9 +1433,11 @@ def edit_tournament(tournament_id):
     for row in players_raw:
         pid = row['id']
         if pid not in player_data:
-            player_data[pid] = {'name': row['name'], 'division': row['division'], 'scores': {}}
+            player_data[pid] = {'name': row['name'], 'division': row['division'],
+                                'scores': {}, 'exhibitions': {}}
             player_order.append(pid)
         player_data[pid]['scores'][row['round_number']] = row['score']
+        player_data[pid]['exhibitions'][row['round_number']] = bool(row['is_exhibition'])
 
     existing_players = [player_data[pid] for pid in player_order]
 

@@ -146,6 +146,10 @@ function addPlayerRow() {
   for (let r = 1; r <= 4; r++) {
     roundCells += `<td class="round-cell text-center ${r > numRounds ? 'd-none' : ''}" data-round="${r}">
       <input type="number" name="score_${i}_${r}" class="form-control form-control-sm text-center" min="1" max="150" placeholder="—">
+      <label class="d-flex align-items-center justify-content-center gap-1 mt-1 small text-muted" style="cursor:pointer;font-size:.7rem">
+        <input type="checkbox" name="exh_${i}_${r}" value="1" style="width:.75em;height:.75em;margin:0;cursor:pointer">
+        Unrated
+      </label>
     </td>`;
   }
 
