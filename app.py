@@ -165,19 +165,19 @@ def assign_league_points(player_scores, points_fn):
 
 def compute_flex_standings(db):
     """
-    Build Flex League standings across all Flex League tournaments.
+    Build Flex League standings across all Flex League tournaments (single division).
 
     Returns:
       {
         'tournaments': [{'id', 'name', 'date'}, ...],   # in date order
-        'Men':    [player_row, ...],                      # sorted by total desc
-        'Women':  [player_row, ...],
+        'players':     [player_row, ...],                # sorted by total desc
       }
 
     Each player_row:
       {
         'player_id', 'name', 'total_points', 'events_played',
-        'weekly': {tournament_id: {'points': float|None, 'counted': bool}},
+        'weekly': {tournament_id: {'points': float|None, 'counted': bool,
+                                   'place': int|None, 'score': int|None}},
       }
     """
     tournaments = db.execute('''
@@ -188,100 +188,87 @@ def compute_flex_standings(db):
     ''').fetchall()
 
     if not tournaments:
-        return {'tournaments': [], 'Men': [], 'Women': []}
+        return {'tournaments': [], 'players': []}
 
-    # For each tournament compute per-division points, places, and scores
+    # For each tournament compute points, places, and scores across the whole field
     tour_points = {}   # {tournament_id: {player_id: points}}
     tour_scores = {}   # {tournament_id: {player_id: total_score}}
-    tour_places = {}   # {tournament_id: {player_id: finishing place in division}}
+    tour_places = {}   # {tournament_id: {player_id: finishing place}}
     for t in tournaments:
         rows = db.execute('''
-            SELECT r.player_id, p.division, SUM(r.score) AS total_score
+            SELECT r.player_id, SUM(r.score) AS total_score
             FROM rounds r
-            JOIN players p ON p.id = r.player_id
             WHERE r.tournament_id = ?
             GROUP BY r.player_id
         ''', (t['id'],)).fetchall()
 
-        by_div = {'Men': [], 'Women': []}
-        scores_map = {}
-        for row in rows:
-            div = row['division'] if row['division'] in by_div else 'Men'
-            by_div[div].append((row['player_id'], row['total_score']))
-            scores_map[row['player_id']] = row['total_score']
-
+        all_players = [(row['player_id'], row['total_score']) for row in rows]
+        scores_map  = {row['player_id']: row['total_score'] for row in rows}
         tour_scores[t['id']] = scores_map
 
-        pts = {}
+        # Points — single pool, all players compete together
+        tour_points[t['id']] = assign_league_points(all_players, flex_points_for_position)
+
+        # Finishing places (ties share the lowest place number)
         places = {}
-        for div_players in by_div.values():
-            pts.update(assign_league_points(div_players, flex_points_for_position))
-            # Assign finishing places (ties share lowest place number)
-            sorted_div = sorted(div_players, key=lambda x: x[1])
-            i = 0
-            while i < len(sorted_div):
-                j = i
-                while j < len(sorted_div) and sorted_div[j][1] == sorted_div[i][1]:
-                    j += 1
-                for k in range(i, j):
-                    places[sorted_div[k][0]] = i + 1
-                i = j
-        tour_points[t['id']] = pts
+        sorted_all = sorted(all_players, key=lambda x: x[1])
+        i = 0
+        while i < len(sorted_all):
+            j = i
+            while j < len(sorted_all) and sorted_all[j][1] == sorted_all[i][1]:
+                j += 1
+            for k in range(i, j):
+                places[sorted_all[k][0]] = i + 1
+            i = j
         tour_places[t['id']] = places
 
     # Collect all player ids that appear in any flex tournament
     all_pids = set(pid for pts in tour_points.values() for pid in pts)
     if not all_pids:
-        return {'tournaments': [dict(t) for t in tournaments], 'Men': [], 'Women': []}
+        return {'tournaments': [dict(t) for t in tournaments], 'players': []}
 
     players_info = {
-        r['id']: {'name': r['name'], 'division': r['division']}
+        r['id']: {'name': r['name']}
         for r in db.execute(
-            'SELECT id, name, division FROM players WHERE id IN ({})'.format(
+            'SELECT id, name FROM players WHERE id IN ({})'.format(
                 ','.join('?' * len(all_pids))),
             list(all_pids)
         ).fetchall()
     }
 
-    standings = {'Men': [], 'Women': []}
+    players = []
     for pid, info in players_info.items():
-        div = info['division'] if info['division'] in standings else 'Men'
-
-        # Build weekly points list in tournament order
         weekly_pts = [(t['id'], tour_points[t['id']].get(pid)) for t in tournaments]
         earned = [(tid, p) for tid, p in weekly_pts if p is not None]
 
-        # Determine top-8 counted weeks
+        # Top-8 weeks count
         sorted_earned = sorted(earned, key=lambda x: x[1], reverse=True)
         counted_ids = {tid for tid, _ in sorted_earned[:8]}
-
         total = sum(p for tid, p in sorted_earned[:8])
 
         weekly = {
             tid: {
-                'points': p,
+                'points':  p,
                 'counted': (p is not None and tid in counted_ids),
-                'place': tour_places.get(tid, {}).get(pid),
-                'score': tour_scores.get(tid, {}).get(pid),
+                'place':   tour_places.get(tid, {}).get(pid),
+                'score':   tour_scores.get(tid, {}).get(pid),
             }
             for tid, p in weekly_pts
         }
 
-        standings[div].append({
-            'player_id': pid,
-            'name': info['name'],
+        players.append({
+            'player_id':    pid,
+            'name':         info['name'],
             'total_points': round(total, 1),
             'events_played': len(earned),
-            'weekly': weekly,
+            'weekly':       weekly,
         })
 
-    for div in standings:
-        standings[div].sort(key=lambda x: x['total_points'], reverse=True)
+    players.sort(key=lambda x: x['total_points'], reverse=True)
 
     return {
         'tournaments': [{'id': t['id'], 'name': t['name'], 'date': t['date']} for t in tournaments],
-        'Men': standings['Men'],
-        'Women': standings['Women'],
+        'players':     players,
     }
 
 

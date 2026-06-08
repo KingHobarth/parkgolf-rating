@@ -7,13 +7,8 @@
 
 {% if not standings.tournaments %}
   <div class="alert alert-info">No Flex League tournaments have been recorded yet.</div>
-{% else %}
-
-{% for division in ['Men', 'Women'] %}
-{% set rows = standings[division] %}
-{% if rows %}
-<div class="card mb-5">
-  <div class="card-header fw-semibold fs-5">{{ division }}'s Division</div>
+{% elif standings.players %}
+<div class="card mb-4">
   <div class="card-body p-0">
     <div class="table-responsive">
       <table class="table table-sm table-hover mb-0 align-middle">
@@ -32,7 +27,7 @@
           </tr>
         </thead>
         <tbody>
-          {% for p in rows %}
+          {% for p in standings.players %}
           <tr>
             <td class="text-center fw-semibold">{{ loop.index }}</td>
             <td><a href="{{ url_for('player', player_id=p.player_id) }}" class="text-decoration-none">{{ p.name }}</a></td>
@@ -65,8 +60,6 @@
     </div>
   </div>
 </div>
-{% endif %}
-{% endfor %}
 
 <div class="text-muted small mt-2">
   <span class="fw-semibold text-success">Green</span> = counted finish &nbsp;·&nbsp;
@@ -74,5 +67,7 @@
   — = did not play
 </div>
 
+{% else %}
+  <div class="alert alert-info">No players found in Flex League tournaments.</div>
 {% endif %}
 {% endblock %}
