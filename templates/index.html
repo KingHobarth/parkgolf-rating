@@ -10,6 +10,11 @@
     {% if selected_year != 'all' %}
       <span class="badge bg-secondary fs-6 ms-2 align-middle">{{ selected_year }}</span>
     {% endif %}
+    <button type="button" class="btn btn-outline-secondary btn-sm ms-2 align-middle"
+            data-bs-toggle="modal" data-bs-target="#howItWorksModal"
+            title="How ratings work" style="font-size:.75rem">
+      ℹ️ How it works
+    </button>
   </h2>
   {% if players %}
   <div class="btn-group" role="group" id="division-filter">
@@ -18,6 +23,53 @@
     <button type="button" class="btn btn-outline-danger" data-filter="Women">Women</button>
   </div>
   {% endif %}
+</div>
+
+{# ── How It Works modal ───────────────────────────────────────────────────── #}
+<div class="modal fade" id="howItWorksModal" tabindex="-1" aria-labelledby="howItWorksLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="howItWorksLabel">⛳ How Ratings Work</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+
+        <h6 class="fw-bold text-success">Field-Calibrated Ratings</h6>
+        <p>Scores are not measured against a fixed par. Instead, each round's <strong>effective scratch</strong> is derived from the established ratings of the players in the field. If a strong field plays a course, the same score earns a higher rating; if a weaker field plays, it earns less. This means every number reflects real competition.</p>
+
+        <h6 class="fw-bold text-success">Effective Scratch</h6>
+        <p>For each round, we look at all players who already have an established rating and calculate:</p>
+        <p class="font-monospace small bg-light rounded p-2">Eff. Scratch = Avg Score + (Avg Rating − 1000) / Slope</p>
+        <p>This is the score a 1000-rated player would be expected to shoot in that field. A player's round rating is then:</p>
+        <p class="font-monospace small bg-light rounded p-2">Rating = 1000 + (Eff. Scratch − Score) × Slope</p>
+
+        <h6 class="fw-bold text-success">Dynamic Slope</h6>
+        <p>The slope measures how much one stroke is worth in rating points. It's calculated each round by comparing the average rating and score of the top half of the field against the bottom half. The slope is clamped between 6 and 15 to prevent runaway inflation.</p>
+
+        <h6 class="fw-bold text-success">NR — Not Rated</h6>
+        <p>A round is marked <strong>NR</strong> when fewer than 3 players with established ratings are in the field. Without enough reference points, the effective scratch can't be reliably determined.</p>
+
+        <h6 class="fw-bold text-success">EXH — Exhibition</h6>
+        <p>An <strong>EXH</strong> round means the player's score was used to help calibrate the field rating, but the round does not count toward that player's own rating. Useful when a player participates in multiple leagues and you don't want their round counted twice.</p>
+
+        <h6 class="fw-bold text-success">Player Rating Calculation</h6>
+        <p>A player's current rating is a weighted average of their rated rounds:</p>
+        <ul>
+          <li><strong>Recency weight:</strong> the most recent 25% of rounds (up to 8) count twice as much as older rounds.</li>
+          <li><strong>Outlier exclusion:</strong> rounds rated more than 2 standard deviations below a player's mean are excluded.</li>
+          <li><strong>1-year cutoff:</strong> players with 8 or more rounds only count rounds from the past year. Players with 7 or fewer rounds keep all rounds regardless of age.</li>
+        </ul>
+
+        <h6 class="fw-bold text-success">Official Leaderboard</h6>
+        <p>Only players with <strong>3 or more rated rounds</strong> appear on the official leaderboard. Use the <em>Show all</em> toggle to see everyone including newer players still building their record.</p>
+
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-success" data-bs-dismiss="modal">Got it</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 {# ── Second row: season filter + search ───────────────────────────────────── #}
