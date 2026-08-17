@@ -41,9 +41,13 @@
   </div>
   {% endif %}
 
-  {# Name search #}
+  {# Name search + qualifier toggle #}
   {% if players %}
-  <div class="ms-auto d-flex align-items-center gap-2" style="min-width:180px; max-width:400px">
+  <div class="ms-auto d-flex align-items-center gap-2" style="min-width:180px; max-width:500px">
+    <button type="button" id="qualifier-toggle" class="btn btn-sm btn-outline-secondary text-nowrap"
+            title="Players need 3+ rated rounds to appear on the official leaderboard">
+      Show all
+    </button>
     <input type="search" id="player-search" class="form-control form-control-sm"
            placeholder="🔍 Search player…" autocomplete="off">
     {% if session.get('admin') and selected_year == 'all' %}
@@ -74,7 +78,7 @@
     </thead>
     <tbody>
       {% for p in players %}
-      <tr data-division="{{ p.division }}" data-name="{{ p.name | lower }}">
+      <tr data-division="{{ p.division }}" data-name="{{ p.name | lower }}" data-total-rounds="{{ p.total_rounds }}">
         <td class="text-center fw-bold text-muted rank-cell" data-val="{{ loop.index }}">
           <span class="rank-num"></span>
           {% if p.rank_change and p.rank_change > 0 %}
@@ -125,6 +129,7 @@
 {% block scripts %}
 <script>
 let currentDivFilter = 'all';
+let showAll = false;
 
 function applyFilters() {
   const search = (document.getElementById('player-search')?.value || '').trim().toLowerCase();
@@ -133,7 +138,8 @@ function applyFilters() {
   rows.forEach(row => {
     const divMatch = currentDivFilter === 'all' || row.dataset.division === currentDivFilter;
     const nameMatch = !search || (row.dataset.name || '').includes(search);
-    const show = divMatch && nameMatch;
+    const qualMatch = showAll || parseInt(row.dataset.totalRounds || '0') >= 3;
+    const show = divMatch && nameMatch && qualMatch;
     row.style.display = show ? '' : 'none';
     if (show) row.querySelector('.rank-num').textContent = rank++;
   });
@@ -158,6 +164,15 @@ document.getElementById('division-filter')?.addEventListener('click', function (
     currentDivFilter === 'Women' ? 'btn-danger'  : 'btn-success'
   );
 
+  applyFilters();
+});
+
+// Qualifier toggle
+document.getElementById('qualifier-toggle')?.addEventListener('click', function () {
+  showAll = !showAll;
+  this.textContent = showAll ? 'Official only' : 'Show all';
+  this.classList.toggle('btn-outline-secondary', !showAll);
+  this.classList.toggle('btn-secondary', showAll);
   applyFilters();
 });
 
