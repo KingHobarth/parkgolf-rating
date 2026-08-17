@@ -812,7 +812,7 @@ def leaderboard():
             'excluded': len(result['excluded_ids']),
         })
 
-    players.sort(key=lambda x: (x['rating'] is not None, x['rating']), reverse=True)
+    players.sort(key=lambda x: (x['rating'] is None, -(x['rating'] or 0)))
 
     # Rank/rating deltas only make sense for the all-time view
     if selected_year == 'all':
