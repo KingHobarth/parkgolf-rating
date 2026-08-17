@@ -99,6 +99,7 @@
           <tr>
             <th class="text-center" style="width:50px" data-sort>Place</th>
             <th data-sort>Player</th>
+            <th class="text-center" style="width:70px">Div</th>
             {% for rn in round_numbers %}
             <th class="text-center" data-sort>
               R{{ rn }}
@@ -128,6 +129,11 @@
             <td>
               <a href="{{ url_for('player', player_id=r.player_id) }}"
                  class="text-decoration-none fw-semibold">{{ r.name }}</a>
+            </td>
+            <td class="text-center">
+              <span class="badge {% if r.division == 'Women' %}bg-danger{% else %}bg-primary{% endif %} bg-opacity-75">
+                {{ r.division }}
+              </span>
             </td>
             {% for rn in round_numbers %}
               {% if rn in r.rounds %}

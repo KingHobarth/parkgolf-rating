@@ -958,7 +958,7 @@ def tournament(tournament_id):
         return redirect(url_for('events'))
 
     players_raw = db.execute('''
-        SELECT p.id AS player_id, p.name,
+        SELECT p.id AS player_id, p.name, p.division,
                r.round_number, r.score, r.rating, r.is_nr,
                COALESCE(r.is_exhibition, 0) AS is_exhibition
         FROM rounds r
@@ -971,7 +971,8 @@ def tournament(tournament_id):
     for row in players_raw:
         pid = row['player_id']
         if pid not in player_map:
-            player_map[pid] = {'name': row['name'], 'player_id': pid, 'rounds': {}}
+            player_map[pid] = {'name': row['name'], 'division': row['division'],
+                               'player_id': pid, 'rounds': {}}
         player_map[pid]['rounds'][row['round_number']] = {
             'score': row['score'], 'rating': row['rating'],
             'is_nr': bool(row['is_nr']), 'is_exhibition': bool(row['is_exhibition'])
@@ -986,12 +987,14 @@ def tournament(tournament_id):
         results.append({
             'player_id': pid,
             'name': data['name'],
+            'division': data['division'],
             'rounds': rounds,
             'total_score': total_score,
             'avg_rating': avg_rating,
             'num_rounds': len(rounds),
         })
-    results.sort(key=lambda x: (x['avg_rating'] is None, -(x['avg_rating'] or 0)))
+    # Primary: rated players sorted by avg_rating desc; secondary: score asc (covers all-NR events)
+    results.sort(key=lambda x: (x['avg_rating'] is None, -(x['avg_rating'] or 0), x['total_score']))
 
     round_numbers = list(range(1, t['num_rounds'] + 1))
 
