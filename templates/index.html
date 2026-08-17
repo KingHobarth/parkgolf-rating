@@ -93,10 +93,14 @@
             {{ p.division }}
           </span>
         </td>
-        <td class="text-center" data-val="{{ p.rating }}">
+        <td class="text-center" data-val="{{ p.rating or 0 }}">
+          {% if p.rating %}
           <span class="badge fs-6 {% if p.rating >= 1000 %}bg-success{% elif p.rating >= 950 %}bg-primary{% elif p.rating >= 900 %}bg-info text-dark{% else %}bg-secondary{% endif %}">
             {{ p.rating }}
           </span>
+          {% else %}
+          <span class="badge fs-6 bg-secondary">NR</span>
+          {% endif %}
           {% if p.rating_change and p.rating_change > 0 %}
             <span class="text-success small d-block">+{{ p.rating_change }}</span>
           {% elif p.rating_change and p.rating_change < 0 %}
