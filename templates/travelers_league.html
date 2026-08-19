@@ -2,7 +2,10 @@
 {% block title %}IPGAA Traveler's League Standings — Park Golf{% endblock %}
 
 {% block content %}
-<h2 class="mb-1">IPGAA Traveler's League Standings</h2>
+<div class="d-flex justify-content-between align-items-start mb-1 flex-wrap gap-2">
+  <h2 class="mb-0">IPGAA Traveler's League Standings</h2>
+  <a href="{{ url_for('league_records', slug='travelers') }}" class="btn btn-outline-danger btn-sm">🏅 Records</a>
+</div>
 <p class="text-muted mb-4">
   Top 3 finishes count &nbsp;·&nbsp;
   Points: 1st&nbsp;100, 2nd&nbsp;97, 3rd&nbsp;95, 4th&nbsp;94, 5th&nbsp;93, then −1/place (min&nbsp;75) &nbsp;·&nbsp;

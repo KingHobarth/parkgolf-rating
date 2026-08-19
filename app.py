@@ -1476,6 +1476,164 @@ def travelers_league():
     return render_template('travelers_league.html', standings=standings)
 
 
+LEAGUE_SLUGS = {
+    'flex':      'Flex League',
+    'monday':    'Monday Night League',
+    'travelers': "IPGAA Traveler's League",
+}
+LEAGUE_LABELS = {v: k for k, v in LEAGUE_SLUGS.items()}
+
+
+@app.route('/league/<slug>/records')
+def league_records(slug):
+    league_name = LEAGUE_SLUGS.get(slug)
+    if not league_name:
+        return redirect(url_for('stats'))
+
+    db = get_db()
+    tournaments = db.execute(
+        'SELECT id, name, date, sort_date FROM tournaments WHERE league = ? ORDER BY sort_date',
+        (league_name,)
+    ).fetchall()
+
+    if not tournaments:
+        return render_template('league_stats.html', league_name=league_name,
+                               slug=slug, no_data=True)
+
+    tid_list = [t['id'] for t in tournaments]
+    ph = ','.join('?' * len(tid_list))
+
+    # Best rated round
+    best_round = db.execute(f'''
+        SELECT p.id AS player_id, p.name, p.division, r.rating, r.score,
+               r.round_number, t.name AS tournament_name, t.date, c.name AS course_name
+        FROM rounds r
+        JOIN players p ON p.id = r.player_id
+        JOIN tournaments t ON t.id = r.tournament_id
+        JOIN courses c ON c.id = t.course_id
+        WHERE r.tournament_id IN ({ph}) AND r.is_nr = 0
+          AND (r.is_exhibition = 0 OR r.is_exhibition IS NULL)
+        ORDER BY r.rating DESC LIMIT 1
+    ''', tid_list).fetchone()
+
+    # Lowest score in a single round
+    best_score = db.execute(f'''
+        SELECT p.id AS player_id, p.name, p.division, r.score, r.rating,
+               r.round_number, t.name AS tournament_name, t.date, c.name AS course_name
+        FROM rounds r
+        JOIN players p ON p.id = r.player_id
+        JOIN tournaments t ON t.id = r.tournament_id
+        JOIN courses c ON c.id = t.course_id
+        WHERE r.tournament_id IN ({ph})
+        ORDER BY r.score ASC LIMIT 1
+    ''', tid_list).fetchone()
+
+    # Most rounds played (top 5)
+    most_rounds = db.execute(f'''
+        SELECT p.id AS player_id, p.name, p.division,
+               COUNT(r.id) AS num_rounds
+        FROM rounds r
+        JOIN players p ON p.id = r.player_id
+        WHERE r.tournament_id IN ({ph})
+          AND r.is_nr = 0
+          AND (r.is_exhibition = 0 OR r.is_exhibition IS NULL)
+        GROUP BY p.id ORDER BY num_rounds DESC LIMIT 5
+    ''', tid_list).fetchall()
+
+    # Most 1000+ rated rounds (top 5)
+    elite_rounds = db.execute(f'''
+        SELECT p.id AS player_id, p.name, p.division,
+               COUNT(r.id) AS elite_count
+        FROM rounds r
+        JOIN players p ON p.id = r.player_id
+        WHERE r.tournament_id IN ({ph})
+          AND r.rating >= 1000 AND r.is_nr = 0
+          AND (r.is_exhibition = 0 OR r.is_exhibition IS NULL)
+        GROUP BY p.id ORDER BY elite_count DESC LIMIT 5
+    ''', tid_list).fetchall()
+
+    # Most events entered (top 5)
+    most_events = db.execute(f'''
+        SELECT p.id AS player_id, p.name, p.division,
+               COUNT(DISTINCT r.tournament_id) AS event_count
+        FROM rounds r
+        JOIN players p ON p.id = r.player_id
+        WHERE r.tournament_id IN ({ph})
+        GROUP BY p.id ORDER BY event_count DESC LIMIT 5
+    ''', tid_list).fetchall()
+
+    # Best scoring average (min 3 rounds, top 5)
+    scoring_leaders = db.execute(f'''
+        SELECT p.id AS player_id, p.name, p.division,
+               ROUND(AVG(r.score), 1) AS avg_score,
+               COUNT(r.id) AS num_rounds
+        FROM rounds r
+        JOIN players p ON p.id = r.player_id
+        WHERE r.tournament_id IN ({ph})
+        GROUP BY p.id HAVING num_rounds >= 3
+        ORDER BY avg_score ASC LIMIT 5
+    ''', tid_list).fetchall()
+
+    # Most wins: lowest total score in a tournament (ties share the win)
+    wins = {}
+    for t in tournaments:
+        rows = db.execute('''
+            SELECT r.player_id, SUM(r.score) AS total_score
+            FROM rounds r WHERE r.tournament_id = ?
+            GROUP BY r.player_id ORDER BY total_score ASC
+        ''', (t['id'],)).fetchall()
+        if rows:
+            min_score = rows[0]['total_score']
+            for row in rows:
+                if row['total_score'] == min_score:
+                    wins.setdefault(row['player_id'], 0)
+                    wins[row['player_id']] += 1
+                else:
+                    break
+
+    most_wins = []
+    if wins:
+        pid_list = list(wins.keys())
+        name_rows = db.execute(
+            'SELECT id, name, division FROM players WHERE id IN ({})'.format(
+                ','.join('?' * len(pid_list))), pid_list
+        ).fetchall()
+        player_info = {r['id']: r for r in name_rows}
+        most_wins = sorted(
+            [{'player_id': pid, 'name': player_info[pid]['name'],
+              'division': player_info[pid]['division'], 'wins': cnt}
+             for pid, cnt in wins.items() if pid in player_info],
+            key=lambda x: x['wins'], reverse=True
+        )[:5]
+
+    # Course records within this league (best score per course)
+    course_recs_raw = db.execute(f'''
+        SELECT c.name AS course_name, p.id AS player_id, p.name AS player_name,
+               p.division, r.score, r.rating, t.name AS tournament_name, t.date,
+               c.id AS course_id
+        FROM rounds r
+        JOIN players p ON p.id = r.player_id
+        JOIN tournaments t ON t.id = r.tournament_id
+        JOIN courses c ON c.id = t.course_id
+        WHERE r.tournament_id IN ({ph})
+        ORDER BY c.name, r.score ASC
+    ''', tid_list).fetchall()
+
+    course_records = {}
+    for row in course_recs_raw:
+        if row['course_name'] not in course_records:
+            course_records[row['course_name']] = dict(row)
+
+    return render_template('league_stats.html',
+        league_name=league_name, slug=slug, no_data=False,
+        num_events=len(tournaments),
+        best_round=best_round, best_score=best_score,
+        most_rounds=most_rounds, elite_rounds=elite_rounds,
+        most_events=most_events, scoring_leaders=scoring_leaders,
+        most_wins=most_wins, course_records=course_records,
+    )
+
+
 @app.route('/reset-baselines', methods=['POST'])
 @admin_required
 def reset_baselines():

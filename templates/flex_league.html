@@ -2,7 +2,10 @@
 {% block title %}Flex League Standings — Park Golf{% endblock %}
 
 {% block content %}
-<h2 class="mb-1">Flex League Standings</h2>
+<div class="d-flex justify-content-between align-items-start mb-1 flex-wrap gap-2">
+  <h2 class="mb-0">Flex League Standings</h2>
+  <a href="{{ url_for('league_records', slug='flex') }}" class="btn btn-outline-primary btn-sm">🏅 Records</a>
+</div>
 <p class="text-muted mb-4">Top 8 finishes count &nbsp;·&nbsp; Points per finish: 1st&nbsp;100, 2nd&nbsp;90, 3rd&nbsp;85, then −5 per place &nbsp;·&nbsp; Ties averaged</p>
 
 {% if not standings.tournaments %}

@@ -1,0 +1,289 @@
+{% extends 'base.html' %}
+{% block title %}{{ league_name }} Records — Park Golf{% endblock %}
+
+{% block content %}
+
+{# Breadcrumb #}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{{ url_for('stats') }}">Stats</a></li>
+    <li class="breadcrumb-item active">{{ league_name }}</li>
+  </ol>
+</nav>
+
+<div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
+  <h2 class="mb-0">
+    {% if slug == 'flex' %}🟢
+    {% elif slug == 'monday' %}🌙
+    {% else %}✈️{% endif %}
+    {{ league_name }} Records
+  </h2>
+  {% if not no_data %}
+  <span class="badge bg-secondary fs-6">{{ num_events }} event{{ 's' if num_events != 1 }}</span>
+  {% endif %}
+</div>
+
+{% if no_data %}
+<div class="alert alert-info">No {{ league_name }} events have been recorded yet.</div>
+{% else %}
+
+{# ── Highlight row ─────────────────────────────────────────────────────────── #}
+<div class="row g-3 mb-5">
+
+  {# Best Rated Round #}
+  <div class="col-sm-6 col-lg-3">
+    <div class="card h-100 shadow-sm">
+      <div class="card-header fw-semibold text-white bg-success">🏆 Best Rated Round</div>
+      <div class="card-body text-center py-4">
+        {% if best_round %}
+        <div class="display-4 fw-bold text-success mb-1">{{ best_round.rating }}</div>
+        <div class="fw-semibold mb-1">
+          <a href="{{ url_for('player', player_id=best_round.player_id) }}" class="text-decoration-none">
+            {{ best_round.name }}
+          </a>
+        </div>
+        <div class="text-muted small">Score: <strong>{{ best_round.score }}</strong> · R{{ best_round.round_number }}</div>
+        <div class="text-muted small">{{ best_round.tournament_name }}</div>
+        <div class="text-muted small">{{ best_round.course_name }}</div>
+        {% else %}
+        <p class="text-muted fst-italic mb-0">No rated rounds yet</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {# Best Score #}
+  <div class="col-sm-6 col-lg-3">
+    <div class="card h-100 shadow-sm">
+      <div class="card-header fw-semibold text-white bg-primary">🎯 Best Score</div>
+      <div class="card-body text-center py-4">
+        {% if best_score %}
+        <div class="display-4 fw-bold text-primary mb-1">{{ best_score.score }}</div>
+        <div class="fw-semibold mb-1">
+          <a href="{{ url_for('player', player_id=best_score.player_id) }}" class="text-decoration-none">
+            {{ best_score.name }}
+          </a>
+        </div>
+        <div class="text-muted small">R{{ best_score.round_number }} · {{ best_score.date }}</div>
+        <div class="text-muted small">{{ best_score.tournament_name }}</div>
+        <div class="text-muted small">{{ best_score.course_name }}</div>
+        {% else %}
+        <p class="text-muted fst-italic mb-0">No data yet</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {# Most Wins #}
+  <div class="col-sm-6 col-lg-3">
+    <div class="card h-100 shadow-sm">
+      <div class="card-header fw-semibold text-white bg-warning text-dark">🥇 Most Event Wins</div>
+      <div class="card-body text-center py-4">
+        {% if most_wins %}
+        {% set w = most_wins[0] %}
+        <div class="display-4 fw-bold text-warning mb-1">{{ w.wins }}</div>
+        <div class="fw-semibold mb-1">
+          <a href="{{ url_for('player', player_id=w.player_id) }}" class="text-decoration-none">
+            {{ w.name }}
+          </a>
+        </div>
+        <div class="text-muted small">1st place finish{{ 'es' if w.wins != 1 }}</div>
+        {% else %}
+        <p class="text-muted fst-italic mb-0">No data yet</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {# Most Rounds #}
+  <div class="col-sm-6 col-lg-3">
+    <div class="card h-100 shadow-sm">
+      <div class="card-header fw-semibold text-white bg-info text-dark">📊 Most Rounds Played</div>
+      <div class="card-body text-center py-4">
+        {% if most_rounds %}
+        {% set r = most_rounds[0] %}
+        <div class="display-4 fw-bold text-info mb-1">{{ r.num_rounds }}</div>
+        <div class="fw-semibold mb-1">
+          <a href="{{ url_for('player', player_id=r.player_id) }}" class="text-decoration-none">
+            {{ r.name }}
+          </a>
+        </div>
+        <div class="text-muted small">rated rounds in {{ league_name }}</div>
+        {% else %}
+        <p class="text-muted fst-italic mb-0">No data yet</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{# ── Detail tables ─────────────────────────────────────────────────────────── #}
+<div class="row g-4 mb-5">
+
+  {# Most Wins table #}
+  <div class="col-md-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header fw-semibold">🥇 Most Event Wins</div>
+      <div class="card-body p-0">
+        <table class="table table-sm table-hover mb-0 align-middle">
+          <thead class="table-light">
+            <tr><th class="text-center" style="width:48px">Rank</th><th>Player</th><th class="text-center">Wins</th></tr>
+          </thead>
+          <tbody>
+            {% for p in most_wins %}
+            <tr>
+              <td class="text-center text-muted fw-semibold">{{ loop.index }}</td>
+              <td><a href="{{ url_for('player', player_id=p.player_id) }}" class="text-decoration-none">{{ p.name }}</a></td>
+              <td class="text-center fw-semibold">{{ p.wins }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="3" class="text-center text-muted fst-italic py-3">No data yet</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  {# Most Rounds table #}
+  <div class="col-md-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header fw-semibold">📊 Most Rounds Played</div>
+      <div class="card-body p-0">
+        <table class="table table-sm table-hover mb-0 align-middle">
+          <thead class="table-light">
+            <tr><th class="text-center" style="width:48px">Rank</th><th>Player</th><th class="text-center">Rounds</th></tr>
+          </thead>
+          <tbody>
+            {% for p in most_rounds %}
+            <tr>
+              <td class="text-center text-muted fw-semibold">{{ loop.index }}</td>
+              <td><a href="{{ url_for('player', player_id=p.player_id) }}" class="text-decoration-none">{{ p.name }}</a></td>
+              <td class="text-center fw-semibold">{{ p.num_rounds }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="3" class="text-center text-muted fst-italic py-3">No data yet</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  {# Most 1000+ Rounds table #}
+  <div class="col-md-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header fw-semibold">⭐ Most 1000+ Rated Rounds</div>
+      <div class="card-body p-0">
+        <table class="table table-sm table-hover mb-0 align-middle">
+          <thead class="table-light">
+            <tr><th class="text-center" style="width:48px">Rank</th><th>Player</th><th class="text-center">Count</th></tr>
+          </thead>
+          <tbody>
+            {% for p in elite_rounds %}
+            <tr>
+              <td class="text-center text-muted fw-semibold">{{ loop.index }}</td>
+              <td><a href="{{ url_for('player', player_id=p.player_id) }}" class="text-decoration-none">{{ p.name }}</a></td>
+              <td class="text-center fw-semibold">{{ p.elite_count }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="3" class="text-center text-muted fst-italic py-3">No 1000+ rated rounds yet</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  {# Most Events Played table #}
+  <div class="col-md-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header fw-semibold">📅 Most Events Entered</div>
+      <div class="card-body p-0">
+        <table class="table table-sm table-hover mb-0 align-middle">
+          <thead class="table-light">
+            <tr><th class="text-center" style="width:48px">Rank</th><th>Player</th><th class="text-center">Events</th></tr>
+          </thead>
+          <tbody>
+            {% for p in most_events %}
+            <tr>
+              <td class="text-center text-muted fw-semibold">{{ loop.index }}</td>
+              <td><a href="{{ url_for('player', player_id=p.player_id) }}" class="text-decoration-none">{{ p.name }}</a></td>
+              <td class="text-center fw-semibold">{{ p.event_count }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="3" class="text-center text-muted fst-italic py-3">No data yet</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  {# Scoring Average Leaders #}
+  {% if scoring_leaders %}
+  <div class="col-12">
+    <div class="card shadow-sm">
+      <div class="card-header fw-semibold">📉 Best Scoring Average <span class="text-muted fw-normal small">(min. 3 rounds)</span></div>
+      <div class="card-body p-0">
+        <table class="table table-sm table-hover mb-0 align-middle">
+          <thead class="table-light">
+            <tr>
+              <th class="text-center" style="width:48px">Rank</th>
+              <th>Player</th>
+              <th class="text-center">Avg Score</th>
+              <th class="text-center">Rounds</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in scoring_leaders %}
+            <tr>
+              <td class="text-center text-muted fw-semibold">{{ loop.index }}</td>
+              <td><a href="{{ url_for('player', player_id=p.player_id) }}" class="text-decoration-none">{{ p.name }}</a></td>
+              <td class="text-center fw-semibold">{{ p.avg_score }}</td>
+              <td class="text-center text-muted">{{ p.num_rounds }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+
+{# ── Course Records ────────────────────────────────────────────────────────── #}
+{% if course_records %}
+<h4 class="border-bottom pb-2 mb-3">🎯 Course Records</h4>
+<div class="row g-3 mb-4">
+  {% for course_name, rec in course_records.items() %}
+  <div class="col-sm-6 col-lg-4">
+    <div class="card shadow-sm h-100">
+      <div class="card-header fw-semibold text-truncate" title="{{ course_name }}">{{ course_name }}</div>
+      <div class="card-body text-center py-3">
+        <div class="display-5 fw-bold text-success mb-1">{{ rec.score }}</div>
+        <div class="fw-semibold mb-1">
+          <a href="{{ url_for('player', player_id=rec.player_id) }}" class="text-decoration-none">
+            {{ rec.player_name }}
+          </a>
+        </div>
+        {% if rec.rating %}
+        <div class="mb-1">
+          <span class="badge {% if rec.rating >= 1000 %}bg-success{% elif rec.rating >= 950 %}bg-primary{% elif rec.rating >= 900 %}bg-info text-dark{% else %}bg-secondary{% endif %}">
+            {{ rec.rating }}
+          </span>
+        </div>
+        {% endif %}
+        <div class="text-muted small">{{ rec.tournament_name }}</div>
+        <div class="text-muted small">{{ rec.date }}</div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% endif %}
+{% endblock %}

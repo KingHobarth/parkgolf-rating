@@ -2,7 +2,52 @@
 {% block title %}Stats — Park Golf Ratings{% endblock %}
 
 {% block content %}
-<h2 class="mb-4">League Records</h2>
+<h2 class="mb-3">Stats &amp; Records</h2>
+
+{# ── Per-League Records links ─────────────────────────────────────────────── #}
+<div class="row g-3 mb-5">
+  <div class="col-sm-4">
+    <a href="{{ url_for('league_records', slug='flex') }}" class="text-decoration-none">
+      <div class="card border-primary shadow-sm h-100">
+        <div class="card-body d-flex align-items-center gap-3 py-3">
+          <span style="font-size:1.8rem">🟢</span>
+          <div>
+            <div class="fw-semibold">Flex League Records</div>
+            <div class="text-muted small">Wins, rounds, ratings &amp; more</div>
+          </div>
+        </div>
+      </div>
+    </a>
+  </div>
+  <div class="col-sm-4">
+    <a href="{{ url_for('league_records', slug='monday') }}" class="text-decoration-none">
+      <div class="card border-warning shadow-sm h-100">
+        <div class="card-body d-flex align-items-center gap-3 py-3">
+          <span style="font-size:1.8rem">🌙</span>
+          <div>
+            <div class="fw-semibold">Monday Night League Records</div>
+            <div class="text-muted small">Wins, rounds, ratings &amp; more</div>
+          </div>
+        </div>
+      </div>
+    </a>
+  </div>
+  <div class="col-sm-4">
+    <a href="{{ url_for('league_records', slug='travelers') }}" class="text-decoration-none">
+      <div class="card border-danger shadow-sm h-100">
+        <div class="card-body d-flex align-items-center gap-3 py-3">
+          <span style="font-size:1.8rem">✈️</span>
+          <div>
+            <div class="fw-semibold">Traveler's League Records</div>
+            <div class="text-muted small">Wins, rounds, ratings &amp; more</div>
+          </div>
+        </div>
+      </div>
+    </a>
+  </div>
+</div>
+
+<h4 class="border-bottom pb-2 mb-3">All-Time Records</h4>
 
 {# ─── Reusable card macro ──────────────────────────────────────────────────── #}
 {% macro div_card(division, player) %}
