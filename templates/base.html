@@ -22,9 +22,16 @@
           {% if session.get('admin') %}
           <li class="nav-item"><a class="nav-link" href="{{ url_for('add_tournament') }}">Add Tournament</a></li>
           {% endif %}
-          <li class="nav-item"><a class="nav-link" href="{{ url_for('flex_league') }}">Flex League</a></li>
-          <li class="nav-item"><a class="nav-link" href="{{ url_for('league_records', slug='monday') }}">Monday League</a></li>
-          <li class="nav-item"><a class="nav-link" href="{{ url_for('travelers_league') }}">Traveler's League</a></li>
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+              Leagues
+            </a>
+            <ul class="dropdown-menu dropdown-menu-dark">
+              <li><a class="dropdown-item" href="{{ url_for('flex_league') }}">🟢 Flex League</a></li>
+              <li><a class="dropdown-item" href="{{ url_for('league_records', slug='monday') }}">🌙 Monday Night League</a></li>
+              <li><a class="dropdown-item" href="{{ url_for('travelers_league') }}">✈️ Traveler's League</a></li>
+            </ul>
+          </li>
           <li class="nav-item"><a class="nav-link" href="{{ url_for('stats') }}">Stats</a></li>
           {% if session.get('admin') %}
           <li class="nav-item"><a class="nav-link" href="{{ url_for('calculator') }}">Calculator</a></li>
