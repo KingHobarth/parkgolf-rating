@@ -66,13 +66,13 @@
 {% if stats.excluded > 0 or stats.expired > 0 or stats.nr_count > 0 or stats.exh_count > 0 or recent_count %}
 <div class="mb-3 d-flex gap-3 flex-wrap">
   {% if recent_count %}
-  <span class="small text-muted"><span class="badge bg-success bg-opacity-25 text-success border border-success fw-bold">2×</span> Most recent 25% of rounds, up to {{ recent_count }} (double weight)</span>
+  <span class="small text-muted"><span class="badge bg-success bg-opacity-25 text-success border border-success fw-bold">2×</span> Most recent {{ recent_count }} rounds (double weight)</span>
   {% endif %}
   {% if stats.excluded > 0 %}
   <span class="small text-muted"><span class="badge bg-warning text-dark">excl.</span> Excluded — more than 2σ below your mean</span>
   {% endif %}
   {% if stats.expired > 0 %}
-  <span class="small text-muted"><span class="badge bg-secondary">old</span> Older than 2 years — not counted in rating</span>
+  <span class="small text-muted"><span class="badge bg-secondary">old</span> Older than 1 year — not counted in rating</span>
   {% endif %}
   {% if stats.nr_count > 0 %}
   <span class="small text-muted"><span class="badge bg-secondary">NR</span> Not rated — fewer than 3 established players in round</span>

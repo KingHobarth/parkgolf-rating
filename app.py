@@ -69,10 +69,14 @@ def compute_player_rating(rounds):
     if not rounds:
         return {'rating': None, 'rounds_used': 0, 'excluded_ids': set()}
 
-    # Apply 1-year age cutoff only for players with 8+ recorded rounds
+    # Apply 1-year age cutoff only for players with 8+ recorded rounds,
+    # but always keep at least the 8 most recent rounds.
     if len(rounds) >= 8:
         cutoff = age_cutoff()
-        rounds = [r for r in rounds if r.get('sort_date') and r['sort_date'] >= cutoff]
+        recent = sorted(rounds, key=lambda r: (r.get('sort_date') or '', r['round_number']), reverse=True)
+        keep_min = recent[:8]
+        keep_min_ids = {r['round_id'] for r in keep_min}
+        rounds = [r for r in rounds if r.get('sort_date') and r['sort_date'] >= cutoff or r['round_id'] in keep_min_ids]
 
     if not rounds:
         return {'rating': None, 'rounds_used': 0, 'excluded_ids': set()}
@@ -95,8 +99,8 @@ def compute_player_rating(rounds):
         reverse=True
     )
 
-    # Weight top 25% of rounds (by recency), at least 1, at most 8
-    recent_count = min(8, max(1, len(filtered_sorted) // 4))
+    # 2× recency weight only applies when player has 8+ rounds
+    recent_count = min(8, len(filtered_sorted)) if len(filtered_sorted) >= 8 else 0
 
     weighted_sum = weight_total = 0
     for i, r in enumerate(filtered_sorted):
@@ -847,11 +851,15 @@ def player(player_id):
     result = compute_player_rating(rounds_raw)
     excluded_ids = result['excluded_ids']
 
-    # Rounds older than 1 year are expired — but only for players with 8+ rounds.
-    # Players with 7 or fewer keep all rounds regardless of age.
+    # Rounds older than 1 year are expired — but only for players with 8+ rounds,
+    # and always keep at least the 8 most recent rounds.
     if len(rounds_raw) >= 8:
         cutoff = age_cutoff()
-        expired_ids = {r['round_id'] for r in rounds_raw if not r.get('sort_date') or r['sort_date'] < cutoff}
+        recent_raw = sorted(rounds_raw, key=lambda r: (r.get('sort_date') or '', r['round_number']), reverse=True)
+        keep_min_ids = {r['round_id'] for r in recent_raw[:8]}
+        expired_ids = {r['round_id'] for r in rounds_raw
+                       if (not r.get('sort_date') or r['sort_date'] < cutoff)
+                       and r['round_id'] not in keep_min_ids}
     else:
         expired_ids = set()
 
