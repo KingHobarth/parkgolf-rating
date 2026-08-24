@@ -99,8 +99,8 @@ def compute_player_rating(rounds):
         reverse=True
     )
 
-    # 2× recency weight only applies when player has 8+ rounds
-    recent_count = min(8, len(filtered_sorted)) if len(filtered_sorted) >= 8 else 0
+    # 2× recency weight only applies when player has 8+ rounds; top 25%, capped at 8
+    recent_count = min(8, max(1, len(filtered_sorted) // 4)) if len(filtered_sorted) >= 8 else 0
 
     weighted_sum = weight_total = 0
     for i, r in enumerate(filtered_sorted):
