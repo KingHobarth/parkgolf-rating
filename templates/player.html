@@ -63,7 +63,7 @@
   </div>
 </div>
 
-{% if stats.excluded > 0 or stats.expired > 0 or stats.nr_count > 0 or recent_count %}
+{% if stats.excluded > 0 or stats.expired > 0 or stats.nr_count > 0 or stats.exh_count > 0 or recent_count %}
 <div class="mb-3 d-flex gap-3 flex-wrap">
   {% if recent_count %}
   <span class="small text-muted"><span class="badge bg-success bg-opacity-25 text-success border border-success fw-bold">2×</span> Most recent 25% of rounds, up to {{ recent_count }} (double weight)</span>
@@ -76,6 +76,9 @@
   {% endif %}
   {% if stats.nr_count > 0 %}
   <span class="small text-muted"><span class="badge bg-secondary">NR</span> Not rated — fewer than 3 established players in round</span>
+  {% endif %}
+  {% if stats.exh_count > 0 %}
+  <span class="small text-muted"><span class="badge bg-warning text-dark">EXH</span> Exhibition — score counted toward field calibration only, not your rating</span>
   {% endif %}
 </div>
 {% endif %}
