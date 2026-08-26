@@ -1,16 +1,18 @@
 {% extends 'base.html' %}
-{% block title %}Park Golf Ratings{% endblock %}
+{% block title %}Park Golf Hub{% endblock %}
 
 {% block hero %}
 <div class="pg-hero" style="background-image: url('{{ url_for('static', filename='img/course-hero.jpg') }}');">
   <div class="pg-hero-overlay">
     <div class="pg-hero-content text-center text-white">
       <div class="mb-3">
-        <span style="font-size:3.5rem; line-height:1;">⛳</span>
+        <img src="{{ url_for('static', filename='img/parkgolfhub-logo.png') }}"
+             alt="Park Golf Hub" style="max-height:90px; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.6));"
+             onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+        <h1 class="display-3 fw-bold mb-2" style="display:none;text-shadow: 0 2px 12px rgba(0,0,0,0.7); letter-spacing:-1px;">
+          Park Golf Hub
+        </h1>
       </div>
-      <h1 class="display-3 fw-bold mb-2" style="text-shadow: 0 2px 12px rgba(0,0,0,0.7); letter-spacing:-1px;">
-        Park Golf Ratings
-      </h1>
       <p class="lead mb-4" style="text-shadow: 0 1px 6px rgba(0,0,0,0.8); max-width:580px; margin:0 auto 1.5rem;">
         A live rating system tracking every round, every player, and every milestone
         across tournaments, leagues, and championships.
