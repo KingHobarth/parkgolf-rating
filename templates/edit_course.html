@@ -24,10 +24,16 @@
           <input type="text" class="form-control" name="city"
                  value="{{ c.location or '' }}" placeholder="e.g. Columbus, OH">
         </div>
-        <div class="col-md-6">
+        <div class="col-md-4">
           <label class="form-label fw-semibold">Address</label>
           <input type="text" class="form-control" name="address"
                  value="{{ c.address or '' }}" placeholder="e.g. 123 Park Ave">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label fw-semibold">Course Par</label>
+          <input type="number" class="form-control" name="par"
+                 value="{{ c.par or '' }}" min="18" max="99" placeholder="e.g. 33">
+          <div class="form-text">Auto-set when all holes have par</div>
         </div>
         <div class="col-auto d-flex align-items-end">
           <button type="submit" class="btn btn-success">Save Info</button>

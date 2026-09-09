@@ -284,7 +284,8 @@ def compute_travelers_standings(db):
     4) total score vs course_rating across counting events, 5) coin flip (manual).
     """
     tournaments = db.execute(
-        """SELECT t.id, t.name, t.date, t.sort_date, c.course_rating
+        """SELECT t.id, t.name, t.date, t.sort_date, c.course_rating,
+                  COALESCE(c.par, c.course_rating) AS course_par
            FROM tournaments t JOIN courses c ON c.id = t.course_id
            WHERE t.league = ? ORDER BY t.sort_date, t.id""",
         ("IPGAA Traveler's League",)
@@ -293,7 +294,7 @@ def compute_travelers_standings(db):
     if not tournaments:
         return {'tournaments': [], 'Men': [], 'Women': []}
 
-    tour_course_rating = {t['id']: t['course_rating'] for t in tournaments}
+    tour_course_rating = {t['id']: t['course_par'] for t in tournaments}
     tour_points = {}
     tour_scores = {}
     tour_places = {}
@@ -503,6 +504,8 @@ def init_db():
         db.execute("ALTER TABLE courses ADD COLUMN rating_adjustment REAL DEFAULT 0")
     if 'address' not in ccols:
         db.execute("ALTER TABLE courses ADD COLUMN address TEXT")
+    if 'par' not in ccols:
+        db.execute("ALTER TABLE courses ADD COLUMN par INTEGER")
     db.execute("UPDATE courses SET rating_adjustment = 0 WHERE rating_adjustment IS NULL")
     # Reset any previously set adjustment — new formula derives scratch from player ratings
     db.execute("UPDATE courses SET rating_adjustment = 0")
@@ -1941,8 +1944,10 @@ def edit_course(course_id):
         if action == 'save_info':
             city    = request.form.get('city',    '').strip() or None
             address = request.form.get('address', '').strip() or None
-            db.execute('UPDATE courses SET location = ?, address = ? WHERE id = ?',
-                       (city, address, course_id))
+            par_str = request.form.get('par', '').strip()
+            par_val = int(par_str) if par_str.isdigit() else None
+            db.execute('UPDATE courses SET location = ?, address = ?, par = ? WHERE id = ?',
+                       (city, address, par_val, course_id))
             db.commit()
             flash('Course info saved.', 'success')
 
@@ -1969,6 +1974,13 @@ def edit_course(course_id):
                 yards = int(yards_str) if yards_str.isdigit() else None
                 db.execute('UPDATE course_holes SET par = ?, yards = ? WHERE id = ?',
                            (par, yards, h['id']))
+            # Auto-sync courses.par from hole totals if all holes have par
+            hole_pars = [r['par'] for r in db.execute(
+                'SELECT par FROM course_holes WHERE course_id = ?', (course_id,)
+            ).fetchall()]
+            if hole_pars and all(p is not None for p in hole_pars):
+                db.execute('UPDATE courses SET par = ? WHERE id = ?',
+                           (sum(hole_pars), course_id))
             db.commit()
             flash('Hole details saved.', 'success')
 
