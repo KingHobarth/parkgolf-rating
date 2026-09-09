@@ -1833,7 +1833,7 @@ def courses():
             'SELECT par, yards FROM course_holes WHERE course_id = ? ORDER BY sort_order',
             (c['id'],)
         ).fetchall()
-        total_par   = sum(h['par']   for h in holes if h['par'])   or None
+        total_par   = sum(h['par']   for h in holes if h['par'])   or c['par'] or None
         total_yards = sum(h['yards'] for h in holes if h['yards']) or None
         course_list.append({
             'id': c['id'], 'name': c['name'], 'location': c['location'],
