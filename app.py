@@ -1708,7 +1708,7 @@ def league_records(slug):
         JOIN tournaments t ON t.id = r.tournament_id
         JOIN course_holes ch ON ch.course_id = t.course_id AND ch.hole_label = hs.hole_label
         WHERE r.tournament_id IN ({ph}) AND ch.par IS NOT NULL
-    ''', tid_list + tid_list).fetchone()
+    ''', tid_list).fetchone()
     strokes_vs_par = strokes_vs_par_row['diff'] if strokes_vs_par_row and strokes_vs_par_row['diff'] is not None else None
 
     # Course records within this league (best score per course)
