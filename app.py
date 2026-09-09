@@ -1693,6 +1693,24 @@ def league_records(slug):
             key=lambda x: x['wins'], reverse=True
         )[:5]
 
+    # Total holes played and strokes vs par
+    total_holes_played = db.execute(f'''
+        SELECT COUNT(hs.id)
+        FROM hole_scores hs
+        JOIN rounds r ON r.id = hs.round_id
+        WHERE r.tournament_id IN ({ph})
+    ''', tid_list).fetchone()[0] or 0
+
+    strokes_vs_par_row = db.execute(f'''
+        SELECT SUM(hs.score - ch.par) AS diff, COUNT(hs.id) AS counted
+        FROM hole_scores hs
+        JOIN rounds r ON r.id = hs.round_id
+        JOIN tournaments t ON t.id = r.tournament_id
+        JOIN course_holes ch ON ch.course_id = t.course_id AND ch.hole_label = hs.hole_label
+        WHERE r.tournament_id IN ({ph}) AND ch.par IS NOT NULL
+    ''', tid_list + tid_list).fetchone()
+    strokes_vs_par = strokes_vs_par_row['diff'] if strokes_vs_par_row and strokes_vs_par_row['diff'] is not None else None
+
     # Course records within this league (best score per course)
     course_recs_raw = db.execute(f'''
         SELECT c.name AS course_name, p.id AS player_id, p.name AS player_name,
@@ -1718,6 +1736,8 @@ def league_records(slug):
         most_rounds=most_rounds, elite_rounds=elite_rounds,
         most_events=most_events, scoring_leaders=scoring_leaders,
         most_wins=most_wins, course_records=course_records,
+        total_holes_played=total_holes_played,
+        strokes_vs_par=strokes_vs_par,
     )
 
 

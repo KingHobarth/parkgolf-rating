@@ -118,6 +118,42 @@
 
 </div>
 
+{# ── Field stats row ────────────────────────────────────────────────────────── #}
+{% if total_holes_played or strokes_vs_par is not none %}
+<div class="row g-3 mb-5">
+
+  {# Total holes played #}
+  {% if total_holes_played %}
+  <div class="col-sm-6">
+    <div class="card h-100 shadow-sm border-secondary">
+      <div class="card-body text-center py-4">
+        <div class="display-4 fw-bold text-secondary mb-1">{{ "{:,}".format(total_holes_played) }}</div>
+        <div class="text-muted">Total Holes Played</div>
+        <div class="text-muted small">across all {{ league_name }} events</div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {# Strokes vs par #}
+  {% if strokes_vs_par is not none %}
+  {% set par_label = strokes_vs_par | abs | string %}
+  <div class="col-sm-6">
+    <div class="card h-100 shadow-sm border-{% if strokes_vs_par < 0 %}success{% elif strokes_vs_par > 0 %}danger{% else %}secondary{% endif %}">
+      <div class="card-body text-center py-4">
+        <div class="display-4 fw-bold text-{% if strokes_vs_par < 0 %}success{% elif strokes_vs_par > 0 %}danger{% else %}secondary{% endif %} mb-1">
+          {% if strokes_vs_par < 0 %}−{{ par_label }}{% elif strokes_vs_par > 0 %}+{{ par_label }}{% else %}E{% endif %}
+        </div>
+        <div class="text-muted">Field vs Par</div>
+        <div class="text-muted small">combined strokes {{ 'under' if strokes_vs_par < 0 else 'over' if strokes_vs_par > 0 else 'at' }} par across all counting holes</div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+{% endif %}
+
 {# ── Detail tables ─────────────────────────────────────────────────────────── #}
 <div class="row g-4 mb-5">
 
