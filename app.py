@@ -1702,12 +1702,11 @@ def league_records(slug):
     ''', tid_list).fetchone()[0] or 0
 
     strokes_vs_par_row = db.execute(f'''
-        SELECT SUM(hs.score - ch.par) AS diff, COUNT(hs.id) AS counted
-        FROM hole_scores hs
-        JOIN rounds r ON r.id = hs.round_id
+        SELECT SUM(r.score - c.par) AS diff
+        FROM rounds r
         JOIN tournaments t ON t.id = r.tournament_id
-        JOIN course_holes ch ON ch.course_id = t.course_id AND ch.hole_label = hs.hole_label
-        WHERE r.tournament_id IN ({ph}) AND ch.par IS NOT NULL
+        JOIN courses c ON c.id = t.course_id
+        WHERE r.tournament_id IN ({ph}) AND c.par IS NOT NULL
     ''', tid_list).fetchone()
     strokes_vs_par = strokes_vs_par_row['diff'] if strokes_vs_par_row and strokes_vs_par_row['diff'] is not None else None
 
