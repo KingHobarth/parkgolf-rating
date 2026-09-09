@@ -119,12 +119,25 @@
 </div>
 
 {# ── Field stats row ────────────────────────────────────────────────────────── #}
-{% if total_holes_played or strokes_vs_par is not none %}
+{% if total_players or total_holes_played or strokes_vs_par is not none %}
 <div class="row g-3 mb-5">
+
+  {# Total players #}
+  {% if total_players %}
+  <div class="col-sm-4">
+    <div class="card h-100 shadow-sm border-secondary">
+      <div class="card-body text-center py-4">
+        <div class="display-4 fw-bold text-secondary mb-1">{{ total_players }}</div>
+        <div class="text-muted">Total Players</div>
+        <div class="text-muted small">who have competed in {{ league_name }}</div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
 
   {# Total holes played #}
   {% if total_holes_played %}
-  <div class="col-sm-6">
+  <div class="col-sm-4">
     <div class="card h-100 shadow-sm border-secondary">
       <div class="card-body text-center py-4">
         <div class="display-4 fw-bold text-secondary mb-1">{{ "{:,}".format(total_holes_played) }}</div>
@@ -138,7 +151,7 @@
   {# Strokes vs par #}
   {% if strokes_vs_par is not none %}
   {% set par_label = strokes_vs_par | abs | string %}
-  <div class="col-sm-6">
+  <div class="col-sm-4">
     <div class="card h-100 shadow-sm border-{% if strokes_vs_par < 0 %}success{% elif strokes_vs_par > 0 %}danger{% else %}secondary{% endif %}">
       <div class="card-body text-center py-4">
         <div class="display-4 fw-bold text-{% if strokes_vs_par < 0 %}success{% elif strokes_vs_par > 0 %}danger{% else %}secondary{% endif %} mb-1">

@@ -1693,6 +1693,12 @@ def league_records(slug):
             key=lambda x: x['wins'], reverse=True
         )[:5]
 
+    # Total unique players in this league
+    total_players = db.execute(f'''
+        SELECT COUNT(DISTINCT r.player_id)
+        FROM rounds r WHERE r.tournament_id IN ({ph})
+    ''', tid_list).fetchone()[0] or 0
+
     # Total holes played: each round counts as (players in that round × holes on the course)
     total_holes_played = db.execute(f'''
         SELECT SUM(ch_count.num_holes)
@@ -1737,6 +1743,7 @@ def league_records(slug):
         most_rounds=most_rounds, elite_rounds=elite_rounds,
         most_events=most_events, scoring_leaders=scoring_leaders,
         most_wins=most_wins, course_records=course_records,
+        total_players=total_players,
         total_holes_played=total_holes_played,
         strokes_vs_par=strokes_vs_par,
     )
