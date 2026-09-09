@@ -42,7 +42,12 @@
           {% for p in rows %}
           <tr>
             <td class="text-center fw-semibold">{{ loop.index }}</td>
-            <td><a href="{{ url_for('player', player_id=p.player_id) }}" class="text-decoration-none">{{ p.name }}</a></td>
+            <td>
+              <a href="{{ url_for('player', player_id=p.player_id) }}" class="text-decoration-none">{{ p.name }}</a>
+              {% if p.tiebreak_note %}
+              <span class="badge bg-secondary ms-1" style="font-size:.65rem" title="Tiebreak applied">TB: {{ p.tiebreak_note }}</span>
+              {% endif %}
+            </td>
             <td class="text-center fw-bold">{{ p.total_points }}</td>
             <td class="text-center text-muted small">{{ p.events_played }}</td>
             {% for t in standings.tournaments %}

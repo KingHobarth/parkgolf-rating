@@ -280,15 +280,20 @@ def compute_travelers_standings(db):
     """
     Build IPGAA Traveler's League standings. Same structure as compute_flex_standings
     but uses travelers_points_for_position and only the top 3 finishes count.
+    Tiebreak order: 1) most wins, 2) best/2nd/3rd counting result, 3) best 4th event,
+    4) total score vs course_rating across counting events, 5) coin flip (manual).
     """
     tournaments = db.execute(
-        "SELECT id, name, date, sort_date FROM tournaments WHERE league = ? ORDER BY sort_date, id",
+        """SELECT t.id, t.name, t.date, t.sort_date, c.course_rating
+           FROM tournaments t JOIN courses c ON c.id = t.course_id
+           WHERE t.league = ? ORDER BY t.sort_date, t.id""",
         ("IPGAA Traveler's League",)
     ).fetchall()
 
     if not tournaments:
         return {'tournaments': [], 'Men': [], 'Women': []}
 
+    tour_course_rating = {t['id']: t['course_rating'] for t in tournaments}
     tour_points = {}
     tour_scores = {}
     tour_places = {}
@@ -361,16 +366,87 @@ def compute_travelers_standings(db):
             for tid, p in weekly_pts
         }
 
+        # Pre-compute tiebreak fields
+        counting_items = [(tid, info) for tid, info in weekly.items()
+                          if info['counted'] and info['points'] is not None]
+        non_counting_pts = sorted(
+            [info['points'] for tid, info in weekly.items()
+             if not info['counted'] and info['points'] is not None],
+            reverse=True
+        )
+        counted_pts_sorted = sorted([info['points'] for _, info in counting_items], reverse=True)
+        while len(counted_pts_sorted) < 3:
+            counted_pts_sorted.append(-999)
+        wins = sum(1 for _, info in counting_items if info.get('place') == 1)
+        has_4th = len(non_counting_pts) > 0
+        best_4th = non_counting_pts[0] if has_4th else -999
+        rel_par = sum(
+            (info['score'] or 0) - tour_course_rating.get(tid, 0)
+            for tid, info in counting_items
+            if info.get('score') is not None
+        )
+
         standings[div].append({
             'player_id': pid,
             'name': info['name'],
             'total_points': round(total, 1),
             'events_played': len(earned),
             'weekly': weekly,
+            '_tb': {
+                'wins': wins,
+                'counted_pts': counted_pts_sorted,
+                'has_4th': has_4th,
+                'best_4th': best_4th,
+                'rel_par': rel_par,
+            },
         })
 
+    def tb_sort_key(p):
+        tb = p['_tb']
+        return (
+            -p['total_points'],
+            -tb['wins'],
+            -tb['counted_pts'][0], -tb['counted_pts'][1], -tb['counted_pts'][2],
+            0 if tb['has_4th'] else 1,
+            -tb['best_4th'],
+            tb['rel_par'],
+        )
+
+    TIEBREAK_LABELS = [
+        None,                       # index 0 unused
+        'Most wins',                # rule 1
+        'Best tournament result',   # rule 2
+        'Best 4th event',           # rule 3
+        'Strokes vs par',           # rule 4
+        'Coin flip',                # rule 5
+    ]
+
     for div in standings:
-        standings[div].sort(key=lambda x: x['total_points'], reverse=True)
+        standings[div].sort(key=tb_sort_key)
+
+        # Annotate each player with which tiebreak rule resolved their position
+        rows = standings[div]
+        for i, p in enumerate(rows):
+            p['tiebreak_note'] = None
+            if i == 0:
+                continue
+            prev = rows[i - 1]
+            if prev['total_points'] != p['total_points']:
+                continue
+            # Same total points — find which field broke the tie
+            ptb, ctb = prev['_tb'], p['_tb']
+            if ptb['wins'] != ctb['wins']:
+                rule = 1
+            elif ptb['counted_pts'] != ctb['counted_pts']:
+                rule = 2
+            elif ptb['has_4th'] != ctb['has_4th'] or ptb['best_4th'] != ctb['best_4th']:
+                rule = 3
+            elif ptb['rel_par'] != ctb['rel_par']:
+                rule = 4
+            else:
+                rule = 5
+            prev['tiebreak_note'] = TIEBREAK_LABELS[rule]
+            p['tiebreak_note'] = TIEBREAK_LABELS[rule]
 
     return {
         'tournaments': [{'id': t['id'], 'name': t['name'], 'date': t['date']} for t in tournaments],
