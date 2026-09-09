@@ -294,13 +294,15 @@ def compute_travelers_standings(db):
     if not tournaments:
         return {'tournaments': [], 'Men': [], 'Women': []}
 
-    tour_course_rating = {t['id']: t['course_par'] for t in tournaments}
+    tour_course_par = {t['id']: t['course_par'] for t in tournaments}
     tour_points = {}
     tour_scores = {}
+    tour_num_rounds = {}   # {tid: {pid: num_rounds_played}}
     tour_places = {}
     for t in tournaments:
         rows = db.execute('''
-            SELECT r.player_id, p.division, SUM(r.score) AS total_score
+            SELECT r.player_id, p.division, SUM(r.score) AS total_score,
+                   COUNT(r.id) AS num_rounds
             FROM rounds r
             JOIN players p ON p.id = r.player_id
             WHERE r.tournament_id = ?
@@ -309,12 +311,15 @@ def compute_travelers_standings(db):
 
         by_div = {'Men': [], 'Women': []}
         scores_map = {}
+        rounds_map = {}
         for row in rows:
             div = row['division'] if row['division'] in by_div else 'Men'
             by_div[div].append((row['player_id'], row['total_score']))
             scores_map[row['player_id']] = row['total_score']
+            rounds_map[row['player_id']] = row['num_rounds']
 
         tour_scores[t['id']] = scores_map
+        tour_num_rounds[t['id']] = rounds_map
 
         pts = {}
         places = {}
@@ -363,6 +368,7 @@ def compute_travelers_standings(db):
                 'counted': (p is not None and tid in counted_ids),
                 'place': tour_places.get(tid, {}).get(pid),
                 'score': tour_scores.get(tid, {}).get(pid),
+                'num_rounds': tour_num_rounds.get(tid, {}).get(pid, 1),
             }
             for tid, p in weekly_pts
         }
@@ -382,7 +388,7 @@ def compute_travelers_standings(db):
         has_4th = len(non_counting_pts) > 0
         best_4th = non_counting_pts[0] if has_4th else -999
         rel_par = sum(
-            (info['score'] or 0) - tour_course_rating.get(tid, 0)
+            (info['score'] or 0) - tour_course_par.get(tid, 0) * info.get('num_rounds', 1)
             for tid, info in counting_items
             if info.get('score') is not None
         )
