@@ -1693,11 +1693,13 @@ def league_records(slug):
             key=lambda x: x['wins'], reverse=True
         )[:5]
 
-    # Total holes played and strokes vs par
+    # Total holes played: each round counts as (players in that round × holes on the course)
     total_holes_played = db.execute(f'''
-        SELECT COUNT(hs.id)
-        FROM hole_scores hs
-        JOIN rounds r ON r.id = hs.round_id
+        SELECT SUM(ch_count.num_holes)
+        FROM rounds r
+        JOIN tournaments t ON t.id = r.tournament_id
+        JOIN (SELECT course_id, COUNT(*) AS num_holes FROM course_holes GROUP BY course_id) ch_count
+             ON ch_count.course_id = t.course_id
         WHERE r.tournament_id IN ({ph})
     ''', tid_list).fetchone()[0] or 0
 
