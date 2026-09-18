@@ -4,7 +4,12 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-start mb-1 flex-wrap gap-2">
   <h2 class="mb-0">IPGAA Traveler's League Standings</h2>
-  <a href="{{ url_for('league_records', slug='travelers') }}" class="btn btn-outline-danger btn-sm">🏅 Records</a>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('league_records', slug='travelers') }}" class="btn btn-outline-danger btn-sm">🏅 Records</a>
+    {% if session.get('admin') %}
+    <a href="{{ url_for('travelers_season_summary') }}" class="btn btn-outline-secondary btn-sm">📋 Season Summary</a>
+    {% endif %}
+  </div>
 </div>
 <p class="text-muted mb-4">
   Top 3 finishes count &nbsp;·&nbsp;

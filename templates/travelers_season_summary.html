@@ -1,0 +1,270 @@
+{% extends 'base.html' %}
+{% block title %}Traveler's Tour Season Summary — Park Golf Hub{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2 no-print">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb mb-0">
+      <li class="breadcrumb-item"><a href="{{ url_for('travelers_league') }}">Traveler's League</a></li>
+      <li class="breadcrumb-item active">Season Summary</li>
+    </ol>
+  </nav>
+  <button class="btn btn-outline-secondary btn-sm" onclick="window.print()">🖨 Print</button>
+</div>
+
+{% if no_data %}
+<div class="alert alert-info">No IPGAA Traveler's League events have been recorded yet.</div>
+{% else %}
+
+{# ══ Header ══════════════════════════════════════════════════════════════════ #}
+<div class="text-center mb-4 pb-3 border-bottom">
+  <div class="fs-1 mb-1">✈️</div>
+  <h1 class="fw-bold mb-0">IPGAA Traveler's League</h1>
+  <h2 class="text-muted fw-normal fs-4 mb-1">Season Summary</h2>
+  <div class="text-muted small">{{ num_events }} event{{ 's' if num_events != 1 }}</div>
+</div>
+
+{# ══ Field Totals ═════════════════════════════════════════════════════════════ #}
+<h4 class="section-head">Field Overview</h4>
+<div class="row g-3 mb-5">
+  <div class="col-6 col-md-3">
+    <div class="stat-card text-center">
+      <div class="stat-value">{{ total_players }}</div>
+      <div class="stat-label">Total Players</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card text-center">
+      <div class="stat-value">{{ total_rounds }}</div>
+      <div class="stat-label">Rounds Played</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card text-center">
+      <div class="stat-value">{{ "{:,}".format(total_holes) if total_holes else '—' }}</div>
+      <div class="stat-label">Holes Played</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    {% if field_vs_par is not none %}
+    {% set fvp_abs = field_vs_par | abs | int %}
+    <div class="stat-card text-center {% if field_vs_par < 0 %}border-success{% elif field_vs_par > 0 %}border-danger{% endif %}">
+      <div class="stat-value {% if field_vs_par < 0 %}text-success{% elif field_vs_par > 0 %}text-danger{% endif %}">
+        {% if field_vs_par < 0 %}−{{ fvp_abs }}{% elif field_vs_par > 0 %}+{{ fvp_abs }}{% else %}E{% endif %}
+      </div>
+      <div class="stat-label">Field vs Par</div>
+    </div>
+    {% else %}
+    <div class="stat-card text-center">
+      <div class="stat-value text-muted">—</div>
+      <div class="stat-label">Field vs Par</div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{# ══ Participation ════════════════════════════════════════════════════════════ #}
+<h4 class="section-head">Rounds Played per Player</h4>
+<div class="row g-3 mb-5">
+  {% for count in by_rounds.keys() | sort(reverse=True) %}
+  {% set players_in_group = by_rounds[count] %}
+  <div class="col-sm-6 col-md-3">
+    <div class="card h-100 shadow-sm">
+      <div class="card-header fw-semibold text-center bg-light">
+        {{ count }} Round{{ 's' if count != 1 }}
+        <span class="badge bg-secondary ms-1">{{ players_in_group | length }}</span>
+      </div>
+      <ul class="list-group list-group-flush">
+        {% for p in players_in_group | sort(attribute='name') %}
+        <li class="list-group-item d-flex justify-content-between align-items-center py-2">
+          <a href="{{ url_for('player', player_id=p.player_id) }}" class="text-decoration-none">{{ p.name }}</a>
+          <span class="badge {% if p.division == 'Women' %}bg-danger{% else %}bg-primary{% endif %} rounded-pill">{{ p.division or 'Men' }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+  {% else %}
+  <div class="col-12"><p class="text-muted">No participation data yet.</p></div>
+  {% endfor %}
+</div>
+
+{# ══ Best Round vs Par ════════════════════════════════════════════════════════ #}
+<h4 class="section-head">Best Single Round vs Par</h4>
+<div class="row g-3 mb-5">
+  {% for div in ['Men', 'Women'] %}
+  {% set r = best_round_vs_par[div] %}
+  <div class="col-md-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header fw-semibold text-white {% if div == 'Women' %}bg-danger{% else %}bg-primary{% endif %}">
+        {{ '♀' if div == 'Women' else '♂' }} {{ div }}'s Best Round
+      </div>
+      <div class="card-body text-center py-4">
+        {% if r %}
+        {% set vp = r.vs_par | int %}
+        <div class="display-4 fw-bold {% if vp < 0 %}text-success{% elif vp > 0 %}text-danger{% else %}text-secondary{% endif %} mb-1">
+          {% if vp < 0 %}−{{ vp | abs }}{% elif vp > 0 %}+{{ vp }}{% else %}E{% endif %}
+        </div>
+        <div class="fw-semibold mb-1">
+          <a href="{{ url_for('player', player_id=r.player_id) }}" class="text-decoration-none">{{ r.name }}</a>
+        </div>
+        <div class="text-muted small">Score {{ r.score }} · Par {{ r.course_par | int }}</div>
+        <div class="text-muted small">R{{ r.round_number }} · {{ r.tournament_name }}</div>
+        <div class="text-muted small">{{ r.course_name }}</div>
+        {% else %}
+        <p class="text-muted fst-italic mb-0">No data</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{# ══ Best 5 vs Par (all rounds) ═══════════════════════════════════════════════ #}
+<h4 class="section-head">Best Players vs Par <span class="text-muted fw-normal fs-6">— combined across all rounds</span></h4>
+<div class="mb-5">
+  <table class="table table-sm table-bordered align-middle">
+    <thead class="table-light">
+      <tr>
+        <th class="text-center" style="width:48px">Rank</th>
+        <th>Player</th>
+        <th class="text-center">Div</th>
+        <th class="text-center">Rounds</th>
+        <th class="text-center">Total vs Par</th>
+        <th class="text-center">Avg vs Par</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in best_vs_par %}
+      {% set vp = p.total_vs_par %}
+      <tr>
+        <td class="text-center fw-semibold">{{ loop.index }}</td>
+        <td><a href="{{ url_for('player', player_id=p.player_id) }}" class="text-decoration-none">{{ p.name }}</a></td>
+        <td class="text-center"><span class="badge {% if p.division == 'Women' %}bg-danger{% else %}bg-primary{% endif %}">{{ p.division or 'Men' }}</span></td>
+        <td class="text-center text-muted">{{ p.num_rounds }}</td>
+        <td class="text-center fw-bold {% if vp < 0 %}text-success{% elif vp > 0 %}text-danger{% endif %}">
+          {% if vp < 0 %}−{{ (vp | abs) | round(1) }}{% elif vp > 0 %}+{{ vp | round(1) }}{% else %}E{% endif %}
+        </td>
+        <td class="text-center text-muted small">
+          {% set avg = (vp / p.num_rounds) | round(1) %}
+          {% if avg < 0 %}−{{ avg | abs }}{% elif avg > 0 %}+{{ avg }}{% else %}E{% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="text-muted text-center fst-italic">No data</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{# ══ Best 5 by Competitors Beaten ══════════════════════════════════════════════ #}
+<h4 class="section-head">Most Competitors Beaten <span class="text-muted fw-normal fs-6">— within division, across all events</span></h4>
+<div class="mb-5">
+  <table class="table table-sm table-bordered align-middle">
+    <thead class="table-light">
+      <tr>
+        <th class="text-center" style="width:48px">Rank</th>
+        <th>Player</th>
+        <th class="text-center">Div</th>
+        <th class="text-center">Competitors Beaten</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in best_beaten %}
+      <tr>
+        <td class="text-center fw-semibold">{{ loop.index }}</td>
+        <td><a href="{{ url_for('player', player_id=p.player_id) }}" class="text-decoration-none">{{ p.name }}</a></td>
+        <td class="text-center"><span class="badge {% if p.division == 'Women' %}bg-danger{% else %}bg-primary{% endif %}">{{ p.division or 'Men' }}</span></td>
+        <td class="text-center fw-bold">{{ p.beaten }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="text-muted text-center fst-italic">No data</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{# ══ Top 3 by Division ═════════════════════════════════════════════════════════ #}
+{% for div in ['Men', 'Women'] %}
+{% if top3[div] %}
+<h4 class="section-head">{{ '♂' if div == 'Men' else '♀' }} {{ div }}'s Division — Top Finishers</h4>
+<div class="row g-3 mb-5">
+  {% for p in top3[div] %}
+  {% set medals = ['🥇','🥈','🥉'] %}
+  <div class="col-md-4">
+    <div class="card shadow-sm h-100 {% if loop.index == 1 %}border-warning{% elif loop.index == 2 %}border-secondary{% else %}border-warning border-opacity-25{% endif %}">
+      <div class="card-header fw-bold text-center {% if loop.index == 1 %}bg-warning text-dark{% elif loop.index == 2 %}bg-secondary text-white{% else %}bg-light{% endif %}">
+        {{ medals[loop.index0] }} {{ loop.index }}{{ 'st' if loop.index == 1 else 'nd' if loop.index == 2 else 'rd' }} Place
+      </div>
+      <div class="card-body">
+        <div class="text-center mb-3">
+          <a href="{{ url_for('player', player_id=p.player_id) }}" class="text-decoration-none fw-bold fs-5">{{ p.name }}</a>
+          <div class="fw-bold fs-4 text-success mt-1">{{ p.total_points }} pts</div>
+          <div class="text-muted small">{{ p.events_played }} event{{ 's' if p.events_played != 1 }}</div>
+        </div>
+
+        {% if p.wins %}
+        <div class="mb-2">
+          <div class="small fw-semibold text-muted mb-1">🏆 Event Win{{ 's' if p.wins | length != 1 }}</div>
+          <ul class="list-unstyled mb-0">
+            {% for w in p.wins %}
+            <li class="small">{{ w }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% else %}
+        <div class="text-muted small mb-2">No event wins this season</div>
+        {% endif %}
+
+        <div class="text-center border-top pt-2 mt-2">
+          <span class="fw-semibold">{{ p.competitors_beaten }}</span>
+          <span class="text-muted small ms-1">competitors beaten</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endfor %}
+
+{% endif %} {# end no_data #}
+{% endblock %}
+
+{% block scripts %}
+<style>
+  .section-head {
+    border-bottom: 2px solid #198754;
+    padding-bottom: .4rem;
+    margin-bottom: 1rem;
+    color: #198754;
+  }
+  .stat-card {
+    background: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: .5rem;
+    padding: 1.25rem .75rem;
+    height: 100%;
+    box-shadow: 0 1px 3px rgba(0,0,0,.06);
+  }
+  .stat-value {
+    font-size: 2.5rem;
+    font-weight: 700;
+    line-height: 1.1;
+  }
+  .stat-label {
+    font-size: .8rem;
+    color: #6c757d;
+    margin-top: .25rem;
+  }
+  @media print {
+    .no-print { display: none !important; }
+    .navbar   { display: none !important; }
+    .container { max-width: 100% !important; }
+    a { color: inherit !important; text-decoration: none !important; }
+    .card { break-inside: avoid; }
+    .row { break-inside: avoid; }
+    h4.section-head { break-before: auto; margin-top: 1.5rem; }
+  }
+</style>
+{% endblock %}

@@ -1569,6 +1569,173 @@ def travelers_league():
     return render_template('travelers_league.html', standings=standings)
 
 
+@app.route('/travelers-league/season-summary')
+@admin_required
+def travelers_season_summary():
+    db = get_db()
+    league_name = "IPGAA Traveler's League"
+
+    tournaments = db.execute(
+        """SELECT t.id, t.name, t.date, t.sort_date,
+                  COALESCE(c.par, c.course_rating) AS course_par,
+                  c.name AS course_name
+           FROM tournaments t JOIN courses c ON c.id = t.course_id
+           WHERE t.league = ? ORDER BY t.sort_date, t.id""",
+        (league_name,)
+    ).fetchall()
+
+    if not tournaments:
+        return render_template('travelers_season_summary.html', no_data=True)
+
+    tid_list = [t['id'] for t in tournaments]
+    ph = ','.join('?' * len(tid_list))
+
+    # ── Field-wide totals ────────────────────────────────────────────────────
+    total_players = db.execute(f'''
+        SELECT COUNT(DISTINCT r.player_id) FROM rounds r WHERE r.tournament_id IN ({ph})
+    ''', tid_list).fetchone()[0] or 0
+
+    total_rounds = db.execute(f'''
+        SELECT COUNT(r.id) FROM rounds r WHERE r.tournament_id IN ({ph})
+    ''', tid_list).fetchone()[0] or 0
+
+    total_holes = db.execute(f'''
+        SELECT SUM(ch_c.num_holes)
+        FROM rounds r
+        JOIN tournaments t ON t.id = r.tournament_id
+        JOIN (SELECT course_id, COUNT(*) AS num_holes FROM course_holes GROUP BY course_id) ch_c
+             ON ch_c.course_id = t.course_id
+        WHERE r.tournament_id IN ({ph})
+    ''', tid_list).fetchone()[0] or 0
+
+    field_vs_par_row = db.execute(f'''
+        SELECT SUM(r.score - COALESCE(c.par, c.course_rating))
+        FROM rounds r
+        JOIN tournaments t ON t.id = r.tournament_id
+        JOIN courses c ON c.id = t.course_id
+        WHERE r.tournament_id IN ({ph}) AND COALESCE(c.par, c.course_rating) IS NOT NULL
+    ''', tid_list).fetchone()
+    field_vs_par = field_vs_par_row[0] if field_vs_par_row and field_vs_par_row[0] is not None else None
+
+    # ── Players grouped by rounds played ────────────────────────────────────
+    player_rounds_rows = db.execute(f'''
+        SELECT p.id AS player_id, p.name, p.division, COUNT(r.id) AS num_rounds
+        FROM rounds r JOIN players p ON p.id = r.player_id
+        WHERE r.tournament_id IN ({ph})
+        GROUP BY p.id ORDER BY p.name
+    ''', tid_list).fetchall()
+
+    by_rounds = {}
+    for pr in player_rounds_rows:
+        n = pr['num_rounds']
+        by_rounds.setdefault(n, []).append(dict(pr))
+    # Sort buckets descending
+    by_rounds = dict(sorted(by_rounds.items(), reverse=True))
+
+    # ── Best single round vs par, by division ───────────────────────────────
+    best_round_vs_par = {}
+    for div in ['Men', 'Women']:
+        row = db.execute(f'''
+            SELECT p.id AS player_id, p.name, p.division, r.score,
+                   COALESCE(c.par, c.course_rating) AS course_par,
+                   r.score - COALESCE(c.par, c.course_rating) AS vs_par,
+                   t.name AS tournament_name, t.date, r.round_number,
+                   c.name AS course_name
+            FROM rounds r
+            JOIN players p ON p.id = r.player_id
+            JOIN tournaments t ON t.id = r.tournament_id
+            JOIN courses c ON c.id = t.course_id
+            WHERE r.tournament_id IN ({ph}) AND p.division = ?
+              AND COALESCE(c.par, c.course_rating) IS NOT NULL
+            ORDER BY vs_par ASC LIMIT 1
+        ''', tid_list + [div]).fetchone()
+        best_round_vs_par[div] = dict(row) if row else None
+
+    # ── Best 5 players by total vs par across all rounds ────────────────────
+    best_vs_par = db.execute(f'''
+        SELECT p.id AS player_id, p.name, p.division,
+               ROUND(SUM(r.score - COALESCE(c.par, c.course_rating)), 1) AS total_vs_par,
+               COUNT(r.id) AS num_rounds
+        FROM rounds r
+        JOIN players p ON p.id = r.player_id
+        JOIN tournaments t ON t.id = r.tournament_id
+        JOIN courses c ON c.id = t.course_id
+        WHERE r.tournament_id IN ({ph}) AND COALESCE(c.par, c.course_rating) IS NOT NULL
+        GROUP BY p.id ORDER BY total_vs_par ASC LIMIT 5
+    ''', tid_list).fetchall()
+
+    # ── Competitors beaten (within division, per tournament) ────────────────
+    competitors_beaten = {}  # {pid: total beaten}
+    tour_wins = {}           # {pid: [tournament names]}
+    for t in tournaments:
+        rows = db.execute('''
+            SELECT r.player_id, p.division, SUM(r.score) AS total_score
+            FROM rounds r JOIN players p ON p.id = r.player_id
+            WHERE r.tournament_id = ?
+            GROUP BY r.player_id
+        ''', (t['id'],)).fetchall()
+
+        by_div = {'Men': {}, 'Women': {}}
+        for row in rows:
+            div = row['division'] if row['division'] in by_div else 'Men'
+            by_div[div][row['player_id']] = row['total_score']
+
+        for div_scores in by_div.values():
+            sorted_pids = sorted(div_scores, key=lambda p: div_scores[p])
+            min_score = div_scores[sorted_pids[0]] if sorted_pids else None
+            for pid, score in div_scores.items():
+                beaten = sum(1 for s in div_scores.values() if s > score)
+                competitors_beaten[pid] = competitors_beaten.get(pid, 0) + beaten
+                if score == min_score:
+                    tour_wins.setdefault(pid, []).append(t['name'])
+
+    # Best 5 by competitors beaten
+    if competitors_beaten:
+        pid_list = list(competitors_beaten.keys())
+        player_info_rows = db.execute(
+            'SELECT id, name, division FROM players WHERE id IN ({})'.format(
+                ','.join('?' * len(pid_list))), pid_list
+        ).fetchall()
+        player_info = {r['id']: dict(r) for r in player_info_rows}
+        best_beaten = sorted(
+            [{'player_id': pid, 'name': player_info[pid]['name'],
+              'division': player_info[pid]['division'], 'beaten': cnt}
+             for pid, cnt in competitors_beaten.items() if pid in player_info],
+            key=lambda x: x['beaten'], reverse=True
+        )[:5]
+    else:
+        best_beaten = []
+
+    # ── Top 3 by division from standings ────────────────────────────────────
+    standings = compute_travelers_standings(db)
+    top3 = {}
+    for div in ['Men', 'Women']:
+        top3[div] = []
+        for p in standings.get(div, [])[:3]:
+            pid = p['player_id']
+            top3[div].append({
+                **p,
+                'wins': tour_wins.get(pid, []),
+                'competitors_beaten': competitors_beaten.get(pid, 0),
+            })
+
+    return render_template('travelers_season_summary.html',
+        no_data=False,
+        league_name=league_name,
+        num_events=len(tournaments),
+        total_players=total_players,
+        total_rounds=total_rounds,
+        total_holes=total_holes,
+        field_vs_par=field_vs_par,
+        by_rounds=by_rounds,
+        best_round_vs_par=best_round_vs_par,
+        best_vs_par=best_vs_par,
+        best_beaten=best_beaten,
+        top3=top3,
+        tournaments=tournaments,
+    )
+
+
 LEAGUE_SLUGS = {
     'flex':      'Flex League',
     'monday':    'Monday Night League',
