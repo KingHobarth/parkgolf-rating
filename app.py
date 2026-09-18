@@ -1617,17 +1617,18 @@ def travelers_season_summary():
     ''', tid_list).fetchone()
     field_vs_par = field_vs_par_row[0] if field_vs_par_row and field_vs_par_row[0] is not None else None
 
-    # ── Players grouped by rounds played ────────────────────────────────────
+    # ── Players grouped by events played (exclude 1-event players) ──────────
     player_rounds_rows = db.execute(f'''
-        SELECT p.id AS player_id, p.name, p.division, COUNT(r.id) AS num_rounds
+        SELECT p.id AS player_id, p.name, p.division,
+               COUNT(DISTINCT r.tournament_id) AS num_events
         FROM rounds r JOIN players p ON p.id = r.player_id
         WHERE r.tournament_id IN ({ph})
-        GROUP BY p.id ORDER BY p.name
+        GROUP BY p.id HAVING num_events >= 2 ORDER BY p.name
     ''', tid_list).fetchall()
 
     by_rounds = {}
     for pr in player_rounds_rows:
-        n = pr['num_rounds']
+        n = pr['num_events']
         by_rounds.setdefault(n, []).append(dict(pr))
     # Sort buckets descending
     by_rounds = dict(sorted(by_rounds.items(), reverse=True))
@@ -1689,7 +1690,7 @@ def travelers_season_summary():
                 if score == min_score:
                     tour_wins.setdefault(pid, []).append(t['name'])
 
-    # Best 5 by competitors beaten
+    # Best 3 by competitors beaten, per division
     if competitors_beaten:
         pid_list = list(competitors_beaten.keys())
         player_info_rows = db.execute(
@@ -1697,14 +1698,18 @@ def travelers_season_summary():
                 ','.join('?' * len(pid_list))), pid_list
         ).fetchall()
         player_info = {r['id']: dict(r) for r in player_info_rows}
-        best_beaten = sorted(
+        all_beaten = sorted(
             [{'player_id': pid, 'name': player_info[pid]['name'],
               'division': player_info[pid]['division'], 'beaten': cnt}
              for pid, cnt in competitors_beaten.items() if pid in player_info],
             key=lambda x: x['beaten'], reverse=True
-        )[:5]
+        )
+        best_beaten = {
+            'Men':   [p for p in all_beaten if (p['division'] or 'Men') == 'Men'][:3],
+            'Women': [p for p in all_beaten if p['division'] == 'Women'][:3],
+        }
     else:
-        best_beaten = []
+        best_beaten = {'Men': [], 'Women': []}
 
     # ── Top 3 by division from standings ────────────────────────────────────
     standings = compute_travelers_standings(db)

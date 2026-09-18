@@ -64,14 +64,14 @@
 </div>
 
 {# ══ Participation ════════════════════════════════════════════════════════════ #}
-<h4 class="section-head">Rounds Played per Player</h4>
+<h4 class="section-head">Events Played per Player</h4>
 <div class="row g-3 mb-5">
   {% for count in by_rounds.keys() | sort(reverse=True) %}
   {% set players_in_group = by_rounds[count] %}
   <div class="col-sm-6 col-md-3">
     <div class="card h-100 shadow-sm">
       <div class="card-header fw-semibold text-center bg-light">
-        {{ count }} Round{{ 's' if count != 1 }}
+        {{ count }} Event{{ 's' if count != 1 }}
         <span class="badge bg-secondary ms-1">{{ players_in_group | length }}</span>
       </div>
       <ul class="list-group list-group-flush">
@@ -157,31 +157,38 @@
   </table>
 </div>
 
-{# ══ Best 5 by Competitors Beaten ══════════════════════════════════════════════ #}
+{# ══ Best 3 by Competitors Beaten, per division ════════════════════════════════ #}
 <h4 class="section-head">Most Competitors Beaten <span class="text-muted fw-normal fs-6">— within division, across all events</span></h4>
-<div class="mb-5">
-  <table class="table table-sm table-bordered align-middle">
-    <thead class="table-light">
-      <tr>
-        <th class="text-center" style="width:48px">Rank</th>
-        <th>Player</th>
-        <th class="text-center">Div</th>
-        <th class="text-center">Competitors Beaten</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for p in best_beaten %}
-      <tr>
-        <td class="text-center fw-semibold">{{ loop.index }}</td>
-        <td><a href="{{ url_for('player', player_id=p.player_id) }}" class="text-decoration-none">{{ p.name }}</a></td>
-        <td class="text-center"><span class="badge {% if p.division == 'Women' %}bg-danger{% else %}bg-primary{% endif %}">{{ p.division or 'Men' }}</span></td>
-        <td class="text-center fw-bold">{{ p.beaten }}</td>
-      </tr>
-      {% else %}
-      <tr><td colspan="4" class="text-muted text-center fst-italic">No data</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+<div class="row g-3 mb-5">
+  {% for div in ['Men', 'Women'] %}
+  <div class="col-md-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header fw-semibold text-white {% if div == 'Women' %}bg-danger{% else %}bg-primary{% endif %}">
+        {{ '♀' if div == 'Women' else '♂' }} {{ div }}'s Division
+      </div>
+      <table class="table table-sm table-bordered mb-0 align-middle">
+        <thead class="table-light">
+          <tr>
+            <th class="text-center" style="width:48px">Rank</th>
+            <th>Player</th>
+            <th class="text-center">Beaten</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in best_beaten[div] %}
+          <tr>
+            <td class="text-center fw-semibold">{{ loop.index }}</td>
+            <td><a href="{{ url_for('player', player_id=p.player_id) }}" class="text-decoration-none">{{ p.name }}</a></td>
+            <td class="text-center fw-bold">{{ p.beaten }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="3" class="text-muted text-center fst-italic">No data</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endfor %}
 </div>
 
 {# ══ Top 3 by Division ═════════════════════════════════════════════════════════ #}
