@@ -191,6 +191,40 @@
   {% endfor %}
 </div>
 
+{# ══ Course Difficulty Ranking ════════════════════════════════════════════════ #}
+{% if course_difficulty %}
+<h4 class="section-head">Course Difficulty Ranking <span class="text-muted fw-normal fs-6">— by average score vs par</span></h4>
+<div class="mb-5">
+  <table class="table table-sm table-bordered align-middle">
+    <thead class="table-light">
+      <tr>
+        <th class="text-center" style="width:48px">Rank</th>
+        <th>Course</th>
+        <th class="text-center">Par</th>
+        <th class="text-center">Avg Score</th>
+        <th class="text-center">Avg vs Par</th>
+        <th class="text-center">Rounds</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in course_difficulty %}
+      {% set avp = c.avg_vs_par | round(1) %}
+      <tr>
+        <td class="text-center fw-semibold">{{ loop.index }}</td>
+        <td>{{ c.course_name }}</td>
+        <td class="text-center text-muted">{{ c.course_par | int }}</td>
+        <td class="text-center">{{ c.avg_score | round(1) }}</td>
+        <td class="text-center fw-bold {% if avp < 0 %}text-success{% elif avp > 0 %}text-danger{% endif %}">
+          {% if avp < 0 %}−{{ avp | abs }}{% elif avp > 0 %}+{{ avp }}{% else %}E{% endif %}
+        </td>
+        <td class="text-center text-muted">{{ c.num_rounds }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
 {# ══ Top 3 by Division ═════════════════════════════════════════════════════════ #}
 {% for div in ['Men', 'Women'] %}
 {% if top3[div] %}
