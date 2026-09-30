@@ -1107,10 +1107,25 @@ def tournament(tournament_id):
             return (1, 0, r['avg_rating'] is None, -(r['avg_rating'] or 0))
         return sorted(div_results, key=sort_key)
 
+    def assign_places(div_results, has_override):
+        """Assign dense-rank places. With an override, positions are explicit (no ties)."""
+        place = 1
+        for i, r in enumerate(div_results):
+            if i == 0 or has_override:
+                r['place'] = i + 1 if has_override else 1
+            else:
+                prev = div_results[i - 1]
+                same = (r['avg_rating'] == prev['avg_rating'] and
+                        r['total_score'] == prev['total_score'])
+                r['place'] = prev['place'] if same else prev['place'] + 1
+        return div_results
+
     results_by_div = {}
     for div in ['Men', 'Women']:
         div_results = [r for r in results if (r['division'] or 'Men') == div]
-        results_by_div[div] = apply_overrides(div_results, div)
+        has_override = bool(overrides.get(div))
+        sorted_div = apply_overrides(div_results, div)
+        results_by_div[div] = assign_places(sorted_div, has_override)
 
     round_numbers = list(range(1, t['num_rounds'] + 1))
 

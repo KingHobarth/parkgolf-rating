@@ -92,7 +92,7 @@
 
   {# ══ Leaderboard tab ══════════════════════════════════════════════════════ #}
   <div class="tab-pane fade show active" id="tabLeaderboard">
-    {% set medals = ['🥇','🥈','🥉'] %}
+    {% set medals = {1: '🥇', 2: '🥈', 3: '🥉'} %}
     {% set any_results = results_by_div['Men'] or results_by_div['Women'] %}
     {% if any_results %}
 
@@ -134,7 +134,7 @@
           {% for r in div_rows %}
           <tr>
             <td class="text-center fw-bold">
-              {% if loop.index <= 3 %}{{ medals[loop.index0] }}{% else %}{{ loop.index }}{% endif %}
+              {% if r.place in medals %}{{ medals[r.place] }}{% else %}{{ r.place }}{% endif %}
             </td>
             <td>
               <a href="{{ url_for('player', player_id=r.player_id) }}"
