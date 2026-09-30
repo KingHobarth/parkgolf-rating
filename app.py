@@ -1,6 +1,7 @@
 import sqlite3
 import os
 import re
+import json
 import shutil
 import statistics
 from datetime import datetime
@@ -499,10 +500,12 @@ def init_db():
         db.execute("UPDATE tournaments SET sort_date = ? WHERE id = ?",
                    (parse_sort_date(t['date']), t['id']))
 
-    # Migrate: league column on tournaments
+    # Migrate: league + place_overrides columns on tournaments
     tourcols = [r[1] for r in db.execute("PRAGMA table_info(tournaments)").fetchall()]
     if 'league' not in tourcols:
         db.execute("ALTER TABLE tournaments ADD COLUMN league TEXT")
+    if 'place_overrides' not in tourcols:
+        db.execute("ALTER TABLE tournaments ADD COLUMN place_overrides TEXT")
 
     # Migrate: rating_adjustment + address columns on courses
     ccols = [r[1] for r in db.execute("PRAGMA table_info(courses)").fetchall()]
@@ -1089,6 +1092,26 @@ def tournament(tournament_id):
     # Primary: rated players sorted by avg_rating desc; secondary: score asc (covers all-NR events)
     results.sort(key=lambda x: (x['avg_rating'] is None, -(x['avg_rating'] or 0), x['total_score']))
 
+    # Apply place overrides (admin-set manual ordering for ties)
+    overrides = json.loads(t['place_overrides']) if t['place_overrides'] else {}
+
+    def apply_overrides(div_results, div_key):
+        order = overrides.get(div_key, [])
+        if not order:
+            return div_results
+        order_index = {pid: i for i, pid in enumerate(order)}
+        def sort_key(r):
+            pos = order_index.get(r['player_id'])
+            if pos is not None:
+                return (0, pos, 0, 0)
+            return (1, 0, r['avg_rating'] is None, -(r['avg_rating'] or 0))
+        return sorted(div_results, key=sort_key)
+
+    results_by_div = {}
+    for div in ['Men', 'Women']:
+        div_results = [r for r in results if (r['division'] or 'Men') == div]
+        results_by_div[div] = apply_overrides(div_results, div)
+
     round_numbers = list(range(1, t['num_rounds'] + 1))
 
     # Per-round stats for display: avg score and actual derived eff_scratch
@@ -1192,6 +1215,7 @@ def tournament(tournament_id):
             overall_event_dist = {k: round(v / total * 100, 1) for k, v in buckets.items()}
 
     return render_template('tournament.html', t=t, results=results,
+                           results_by_div=results_by_div, overrides=overrides,
                            round_numbers=round_numbers, round_stats=round_stats,
                            course_holes=course_holes, has_hole_data=has_hole_data,
                            hole_scores_by_round=hole_scores_by_round,
@@ -1496,6 +1520,22 @@ def edit_tournament(tournament_id):
         update_player_ratings(db)
         db.commit()
 
+        # Save place overrides
+        place_overrides = {}
+        for div in ['Men', 'Women']:
+            div_order = []
+            for place in [1, 2, 3]:
+                pid_str = request.form.get(f'override_{div}_{place}', '').strip()
+                if pid_str:
+                    try:
+                        div_order.append(int(pid_str))
+                    except ValueError:
+                        pass
+            if div_order:
+                place_overrides[div] = div_order
+        db.execute('UPDATE tournaments SET place_overrides = ? WHERE id = ?',
+                   (json.dumps(place_overrides) if place_overrides else None, tournament_id))
+
         if errors:
             for e in errors:
                 flash(e, 'warning')
@@ -1524,8 +1564,23 @@ def edit_tournament(tournament_id):
 
     existing_players = [player_data[pid] for pid in player_order]
 
+    # Build sorted-by-score division results for the place-override UI
+    div_results_for_overrides = {}
+    score_rows = db.execute('''
+        SELECT p.id AS player_id, p.name, p.division, SUM(r.score) AS total_score
+        FROM rounds r JOIN players p ON p.id = r.player_id
+        WHERE r.tournament_id = ? GROUP BY p.id ORDER BY total_score ASC
+    ''', (tournament_id,)).fetchall()
+    for div in ['Men', 'Women']:
+        div_results_for_overrides[div] = [dict(r) for r in score_rows
+                                          if (r['division'] or 'Men') == div]
+
+    overrides = json.loads(t['place_overrides']) if t['place_overrides'] else {}
+
     return render_template('edit_tournament.html', t=t, courses=courses,
-                           all_players=all_players, existing_players=existing_players)
+                           all_players=all_players, existing_players=existing_players,
+                           div_results_for_overrides=div_results_for_overrides,
+                           overrides=overrides)
 
 
 @app.route('/tournament/<int:tournament_id>/delete', methods=['GET', 'POST'])
@@ -1711,6 +1766,21 @@ def travelers_season_summary():
     else:
         best_beaten = {'Men': [], 'Women': []}
 
+    # ── Course difficulty ranking (avg score vs par) ─────────────────────────
+    course_difficulty = db.execute(f'''
+        SELECT c.name AS course_name,
+               COALESCE(c.par, c.course_rating) AS course_par,
+               COUNT(r.id) AS num_rounds,
+               AVG(r.score) AS avg_score,
+               AVG(r.score - COALESCE(c.par, c.course_rating)) AS avg_vs_par
+        FROM rounds r
+        JOIN tournaments t ON t.id = r.tournament_id
+        JOIN courses c ON c.id = t.course_id
+        WHERE r.tournament_id IN ({ph}) AND COALESCE(c.par, c.course_rating) IS NOT NULL
+        GROUP BY c.id ORDER BY avg_vs_par ASC
+    ''', tid_list).fetchall()
+    course_difficulty = [dict(r) for r in course_difficulty]
+
     # ── Top 3 by division from standings ────────────────────────────────────
     standings = compute_travelers_standings(db)
     top3 = {}
@@ -1736,6 +1806,7 @@ def travelers_season_summary():
         best_round_vs_par=best_round_vs_par,
         best_vs_par=best_vs_par,
         best_beaten=best_beaten,
+        course_difficulty=course_difficulty,
         top3=top3,
         tournaments=tournaments,
     )

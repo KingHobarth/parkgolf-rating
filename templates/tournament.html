@@ -92,16 +92,24 @@
 
   {# ══ Leaderboard tab ══════════════════════════════════════════════════════ #}
   <div class="tab-pane fade show active" id="tabLeaderboard">
-    {% if results %}
-    <div class="table-responsive">
-      <table class="table table-hover align-middle" data-sortable>
+    {% set medals = ['🥇','🥈','🥉'] %}
+    {% set any_results = results_by_div['Men'] or results_by_div['Women'] %}
+    {% if any_results %}
+
+    {# Macro for a single division table #}
+    {% macro div_table(div, div_rows) %}
+    {% if div_rows %}
+    <h5 class="fw-semibold mt-3 mb-2">
+      <span class="badge {% if div == 'Women' %}bg-danger{% else %}bg-primary{% endif %} me-2">{{ div }}'s</span>
+    </h5>
+    <div class="table-responsive mb-4">
+      <table class="table table-hover align-middle">
         <thead class="table-success">
           <tr>
-            <th class="text-center" style="width:50px" data-sort>Place</th>
-            <th data-sort>Player</th>
-            <th class="text-center" style="width:70px">Div</th>
+            <th class="text-center" style="width:60px">Place</th>
+            <th>Player</th>
             {% for rn in round_numbers %}
-            <th class="text-center" data-sort>
+            <th class="text-center">
               R{{ rn }}
               {% if rn in round_stats %}
               <br><small class="fw-normal text-muted"
@@ -117,23 +125,20 @@
             </th>
             {% endfor %}
             {% if round_numbers|length > 1 %}
-            <th class="text-center" data-sort>Total</th>
+            <th class="text-center">Total</th>
             {% endif %}
-            <th class="text-center" data-sort>Avg Rating</th>
+            <th class="text-center">Avg Rating</th>
           </tr>
         </thead>
         <tbody>
-          {% for r in results %}
+          {% for r in div_rows %}
           <tr>
-            <td class="text-center text-muted fw-bold rank-cell">{{ loop.index }}</td>
+            <td class="text-center fw-bold">
+              {% if loop.index <= 3 %}{{ medals[loop.index0] }}{% else %}{{ loop.index }}{% endif %}
+            </td>
             <td>
               <a href="{{ url_for('player', player_id=r.player_id) }}"
                  class="text-decoration-none fw-semibold">{{ r.name }}</a>
-            </td>
-            <td class="text-center">
-              <span class="badge {% if r.division == 'Women' %}bg-danger{% else %}bg-primary{% endif %} bg-opacity-75">
-                {{ r.division }}
-              </span>
             </td>
             {% for rn in round_numbers %}
               {% if rn in r.rounds %}
@@ -174,6 +179,12 @@
         </tbody>
       </table>
     </div>
+    {% endif %}
+    {% endmacro %}
+
+    {{ div_table('Men', results_by_div['Men']) }}
+    {{ div_table('Women', results_by_div['Women']) }}
+
     {% else %}
     <p class="text-muted">No results recorded for this event.</p>
     {% endif %}

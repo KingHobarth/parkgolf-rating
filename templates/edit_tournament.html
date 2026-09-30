@@ -113,6 +113,38 @@
     </div>
   </div>
 
+  {# ── Place Overrides (tie-breaking for 1st/2nd/3rd) ─────────────────────── #}
+  {% for div in ['Men', 'Women'] %}
+  {% set div_rows = div_results_for_overrides[div] %}
+  {% if div_rows %}
+  <div class="card mb-3 border-warning">
+    <div class="card-header fw-semibold bg-warning bg-opacity-10">
+      🏅 {{ div }}'s Division — Place Overrides
+      <small class="text-muted fw-normal ms-2">Set manually only when there are ties for 1st, 2nd, or 3rd</small>
+    </div>
+    <div class="card-body">
+      <div class="row g-3">
+        {% for place in [1, 2, 3] %}
+        {% set medals = {1: '🥇', 2: '🥈', 3: '🥉'} %}
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">{{ medals[place] }} {{ place }}{{ 'st' if place == 1 else 'nd' if place == 2 else 'rd' }} Place</label>
+          <select class="form-select" name="override_{{ div }}_{{ place }}">
+            <option value="">(auto)</option>
+            {% for p in div_rows %}
+            <option value="{{ p.player_id }}"
+              {% if overrides.get(div, [])|length >= place and overrides[div][place-1] == p.player_id %}selected{% endif %}>
+              {{ p.name }} ({{ p.total_score }})
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+  {% endfor %}
+
   <button type="submit" class="btn btn-success px-4">Save Changes</button>
   <a href="{{ url_for('tournament', tournament_id=t.id) }}" class="btn btn-link text-muted">Cancel</a>
 </form>
