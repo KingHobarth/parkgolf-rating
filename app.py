@@ -1560,6 +1560,7 @@ def edit_tournament(tournament_id):
                 place_overrides[div] = div_order
         db.execute('UPDATE tournaments SET place_overrides = ? WHERE id = ?',
                    (json.dumps(place_overrides) if place_overrides else None, tournament_id))
+        db.commit()
 
         if errors:
             for e in errors:
